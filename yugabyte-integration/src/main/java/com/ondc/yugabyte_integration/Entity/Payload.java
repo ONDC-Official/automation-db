@@ -1,10 +1,11 @@
 package com.ondc.yugabyte_integration.Entity;
 
-import com.ondc.yugabyte_integration.Service.JSONObjectConverter;
+import com.ondc.yugabyte_integration.Service.MapToJsonConverter;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.NoArgsConstructor;
-import org.json.JSONObject;
+
+import java.util.Map;
 
 @Entity
 @Table(name = "payload")
@@ -22,8 +23,8 @@ public class Payload {
     private String bppId;
     private String bapId;
 
-    @Convert(converter = JSONObjectConverter.class)
-    private JSONObject payload;
+    @Convert(converter = MapToJsonConverter.class)
+    private Map<String, Object> payload;
 
     public enum Action {
         SEARCH ("search"),
@@ -83,11 +84,11 @@ public class Payload {
     }
 
     @Column(name = "payload")
-    public JSONObject getPayload() {
+    public Map<String, Object> getPayload() {
         return payload;
     }
 
-    public void setPayload(JSONObject payload) {
+    public void setPayload(Map<String, Object> payload) {
         this.payload = payload;
     }
 

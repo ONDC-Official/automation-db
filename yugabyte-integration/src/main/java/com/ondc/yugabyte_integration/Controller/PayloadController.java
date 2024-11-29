@@ -30,7 +30,7 @@ public class PayloadController {
 
     @PostMapping
     public Payload createPayload(@RequestBody Payload payload) {
-        Log.info("Payload - " + payload);
+        Log.info("Payload - {}", payload);
         return service.savePayload(payload);
     }
 
