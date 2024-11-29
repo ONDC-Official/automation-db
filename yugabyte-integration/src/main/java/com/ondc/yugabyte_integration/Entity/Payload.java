@@ -5,6 +5,8 @@ import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.NoArgsConstructor;
 
+import java.sql.Timestamp;
+import java.util.Date;
 import java.util.Map;
 
 @Entity
@@ -25,6 +27,16 @@ public class Payload {
 
     @Convert(converter = MapToJsonConverter.class)
     private Map<String, Object> payload;
+
+    private Type type;
+    private Integer httpStatus;
+    private Timestamp createdAt;
+    private Timestamp updatedAt;
+
+    public enum Type {
+        REQUEST,
+        RESPONSE
+    }
 
     public enum Action {
         SEARCH ("search"),
@@ -110,16 +122,55 @@ public class Payload {
         this.bapId = bapId;
     }
 
+    @Column(name = "type")
+    public Type getType() {
+        return type;
+    }
+
+    public void setType(Type type) {
+        this.type = type;
+    }
+
+    @Column(name = "http_status")
+    public Integer getHttpStatus() {
+        return httpStatus;
+    }
+
+    public void setHttpStatus(Integer httpStatus) {
+        this.httpStatus = httpStatus;
+    }
+
+    @Column(name = "created_at")
+    public Timestamp getCreatedAt() {
+        return createdAt;
+    }
+
+    public void setCreatedAt(Timestamp createdAt) {
+        this.createdAt = createdAt;
+    }
+
+    @Column(name = "updated_at")
+    public Timestamp getUpdatedAt() {
+        return updatedAt;
+    }
+
+    public void setUpdatedAt(Timestamp updatedAt) {
+        this.updatedAt = updatedAt;
+    }
+
     @Override
     public String toString() {
         return "Payload{" +
-                "id=" + id +
-                ", messageId='" + messageId + '\'' +
+                "messageId='" + messageId + '\'' +
                 ", transactionalId='" + transactionalId + '\'' +
                 ", action=" + action +
                 ", bppId='" + bppId + '\'' +
                 ", bapId='" + bapId + '\'' +
                 ", payload=" + payload +
+                ", type=" + type +
+                ", httpStatus=" + httpStatus +
+                ", createdAt=" + createdAt +
+                ", updatedAt=" + updatedAt +
                 '}';
     }
 }
