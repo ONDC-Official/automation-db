@@ -25,6 +25,7 @@ public class Payload {
     private String bapId;
 
     @Convert(converter = MapToJsonConverter.class)
+    @Column(columnDefinition = "text")
     private Map<String, Object> jsonObject;
 
     private Type type;
