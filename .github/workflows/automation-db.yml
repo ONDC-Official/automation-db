@@ -49,5 +49,5 @@ jobs:
 
             # Run the new container
             # docker run -d --name automation-db -p 8080:8080 ${{ secrets.DOCKER_USERNAME }}/automation-db:latest
-            docker build --build-arg DB_URL=${{secrets.YUGABYTE_DB_URL}} --build-arg DB_PASSWORD=${{secrets.YUGABYTE_PASSWORD}} -t yugabyte-integration . && docker run -d  -e DB_URL=${{secrets.YUGABYTE_DB_URL}} -e DB_PASSWORD=${{secrets.YUGABYTE_PASSWORD}} -p 8080:8080 --name yugabyte-integration  yugabyte-integration
+            docker build --build-arg DB_URL=${{vars.YUGABYTE_DB_URL}} --build-arg DB_PASSWORD=${{vars.YUGABYTE_PASSWORD}} -t yugabyte-integration . && docker run -d  -e DB_URL=${{vars.YUGABYTE_DB_URL}} -e DB_PASSWORD=${{vars.YUGABYTE_PASSWORD}} -p 8080:8080 --name yugabyte-integration  yugabyte-integration
           EOF
