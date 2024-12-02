@@ -48,5 +48,5 @@ jobs:
             docker rm automation-db || true
 
             # Run the new container
-            docker run -d --name automation-db -p 80:80 ${{ secrets.DOCKER_USERNAME }}/automation-db:latest
+            docker run -d --name automation-db -p 8080:8080 ${{ secrets.DOCKER_USERNAME }}/automation-db:latest
           EOF
