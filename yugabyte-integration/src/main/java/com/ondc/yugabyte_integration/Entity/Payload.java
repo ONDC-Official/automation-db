@@ -6,7 +6,6 @@ import lombok.AllArgsConstructor;
 import lombok.NoArgsConstructor;
 
 import java.sql.Timestamp;
-import java.util.Date;
 import java.util.Map;
 
 @Entity
@@ -19,19 +18,31 @@ public class Payload {
     @GeneratedValue(strategy = GenerationType.AUTO)
     private Long id;
     private String messageId;
-    private String transactionalId;
+    private String transactionId;
     @Enumerated(EnumType.STRING)
     private Action action;
     private String bppId;
     private String bapId;
 
     @Convert(converter = MapToJsonConverter.class)
-    private Map<String, Object> payload;
+    private Map<String, Object> jsonObject;
 
     private Type type;
     private Integer httpStatus;
     private Timestamp createdAt;
     private Timestamp updatedAt;
+
+    @PrePersist
+    protected void onCreate() {
+        Timestamp now = new Timestamp(System.currentTimeMillis());
+        this.createdAt = now;
+        this.updatedAt = now;
+    }
+
+    @PreUpdate
+    protected void onUpdate() {
+        this.updatedAt = new Timestamp(System.currentTimeMillis());
+    }
 
     public enum Type {
         REQUEST,
@@ -77,13 +88,13 @@ public class Payload {
         this.messageId = messageId;
     }
 
-    @Column(name = "transactional_id")
-    public String getTransactionalId() {
-        return transactionalId;
+    @Column(name = "transaction_id")
+    public String getTransactionId() {
+        return transactionId;
     }
 
-    public void setTransactionalId(String transactionalId) {
-        this.transactionalId = transactionalId;
+    public void setTransactionId(String transactionId) {
+        this.transactionId = transactionId;
     }
 
     @Column(name = "action")
@@ -95,13 +106,13 @@ public class Payload {
         this.action = action;
     }
 
-    @Column(name = "payload")
-    public Map<String, Object> getPayload() {
-        return payload;
+    @Column(name = "jsonObject")
+    public Map<String, Object> getJsonObject() {
+        return jsonObject;
     }
 
-    public void setPayload(Map<String, Object> payload) {
-        this.payload = payload;
+    public void setJsonObject(Map<String, Object> jsonObject) {
+        this.jsonObject = jsonObject;
     }
 
     @Column(name = "bpp_id")
@@ -161,12 +172,13 @@ public class Payload {
     @Override
     public String toString() {
         return "Payload{" +
-                "messageId='" + messageId + '\'' +
-                ", transactionalId='" + transactionalId + '\'' +
+                "id=" + id +
+                ", messageId='" + messageId + '\'' +
+                ", transactionId='" + transactionId + '\'' +
                 ", action=" + action +
                 ", bppId='" + bppId + '\'' +
                 ", bapId='" + bapId + '\'' +
-                ", payload=" + payload +
+                ", jsonObject=" + jsonObject +
                 ", type=" + type +
                 ", httpStatus=" + httpStatus +
                 ", createdAt=" + createdAt +
