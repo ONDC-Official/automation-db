@@ -9,6 +9,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+import java.util.Optional;
 
 @Service
 public class PayloadService {
@@ -24,6 +25,10 @@ public class PayloadService {
 
     public Payload getPayloadById(Long id) {
         return repository.findById(id).orElse(null);
+    }
+
+    public Optional<Payload> getPayloadByTransactionId(String transactionId) {
+        return repository.findByTransactionId(transactionId);
     }
 
     @Transactional

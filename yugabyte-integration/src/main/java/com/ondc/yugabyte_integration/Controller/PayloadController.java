@@ -8,6 +8,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Optional;
 
 @RestController
 @RequestMapping("/payload")
@@ -43,5 +44,11 @@ public class PayloadController {
     @DeleteMapping("/{id}")
     public void deletePayload(@PathVariable Long id) {
         service.deletePayload(id);
+    }
+
+    @GetMapping("/{transactionId}")
+    public Payload getPayloadFromTransactionId(@PathVariable String transactionId) {
+        Optional<Payload> payload = service.getPayloadByTransactionId(transactionId);
+        return payload.orElse(null);
     }
 }
