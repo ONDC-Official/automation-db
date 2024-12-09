@@ -34,7 +34,22 @@ public class PayloadService {
     @Transactional
     public Payload savePayload(Payload payload) {
         return repository.save(payload);
+    }
 
+    public Payload updatePayload(Long id, Payload updatedPayload) {
+        return repository.findById(id)
+                .map(existingPayload -> {
+                    existingPayload.setMessageId(updatedPayload.getMessageId());
+                    existingPayload.setTransactionId(updatedPayload.getTransactionId());
+                    existingPayload.setAction(updatedPayload.getAction());
+                    existingPayload.setBppId(updatedPayload.getBppId());
+                    existingPayload.setBapId(updatedPayload.getBapId());
+                    existingPayload.setJsonObject(updatedPayload.getJsonObject());
+                    existingPayload.setType(updatedPayload.getType());
+                    existingPayload.setHttpStatus(updatedPayload.getHttpStatus());
+                    return repository.save(existingPayload);
+                })
+                .orElseThrow(() -> new RuntimeException("Payload not found with id: " + id));
     }
 
     public void deletePayload(Long id) {

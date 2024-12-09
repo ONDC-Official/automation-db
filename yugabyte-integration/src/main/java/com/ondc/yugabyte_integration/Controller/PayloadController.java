@@ -38,7 +38,7 @@ public class PayloadController {
     @PutMapping("/{id}")
     public Payload updatePayload(@PathVariable Long id, @RequestBody Payload payload) {
         payload.setId(id);
-        return service.savePayload(payload);
+        return service.updatePayload(id, payload);
     }
 
     @DeleteMapping("/{id}")

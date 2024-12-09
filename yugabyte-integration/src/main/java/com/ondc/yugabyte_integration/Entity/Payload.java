@@ -1,5 +1,6 @@
 package com.ondc.yugabyte_integration.Entity;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.ondc.yugabyte_integration.Service.MapToJsonConverter;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
@@ -19,6 +20,7 @@ public class Payload {
     private Long id;
     private String messageId;
     private String transactionId;
+    private String flowId;
     @Enumerated(EnumType.STRING)
     private Action action;
     private String bppId;
@@ -32,6 +34,11 @@ public class Payload {
     private Integer httpStatus;
     private Timestamp createdAt;
     private Timestamp updatedAt;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "session_id", referencedColumnName = "sessionId")
+    @JsonIgnoreProperties("payloads")
+    private SessionDetails sessionDetails;
 
     @PrePersist
     protected void onCreate() {
@@ -96,6 +103,15 @@ public class Payload {
 
     public void setTransactionId(String transactionId) {
         this.transactionId = transactionId;
+    }
+
+    @Column(name = "flowId")
+    public String getFlowId() {
+        return flowId;
+    }
+
+    public void setFlowId(String flowId) {
+        this.flowId = flowId;
     }
 
     @Column(name = "action")
@@ -170,20 +186,12 @@ public class Payload {
         this.updatedAt = updatedAt;
     }
 
-    @Override
-    public String toString() {
-        return "Payload{" +
-                "id=" + id +
-                ", messageId='" + messageId + '\'' +
-                ", transactionId='" + transactionId + '\'' +
-                ", action=" + action +
-                ", bppId='" + bppId + '\'' +
-                ", bapId='" + bapId + '\'' +
-                ", jsonObject=" + jsonObject +
-                ", type=" + type +
-                ", httpStatus=" + httpStatus +
-                ", createdAt=" + createdAt +
-                ", updatedAt=" + updatedAt +
-                '}';
+    @Column(name = "session_detail_id")
+    public SessionDetails getSessionDetails() {
+        return sessionDetails;
+    }
+
+    public void setSessionDetails(SessionDetails sessionDetails) {
+        this.sessionDetails = sessionDetails;
     }
 }
