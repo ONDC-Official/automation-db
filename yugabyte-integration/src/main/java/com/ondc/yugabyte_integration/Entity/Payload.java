@@ -38,8 +38,7 @@ public class Payload {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "session_id", referencedColumnName = "sessionId")
-//    @JsonIgnoreProperties("payloads")
-    @JsonIgnore
+    @JsonIgnoreProperties({"payloads", "npType", "npId", "domain", "version", "sessionType", "sessionActive"})
     private SessionDetails sessionDetails;
 
     @PrePersist
