@@ -36,7 +36,6 @@ public class SessionDetailsService {
                 .map(existingSession -> {
                     existingSession.setNpType(updatedDetails.getNpType());
                     existingSession.setNpId(updatedDetails.getNpId());
-                    existingSession.setTransactionId(updatedDetails.getTransactionId());
                     existingSession.setDomain(updatedDetails.getDomain());
                     return sessionDetailsRepository.save(existingSession);
                 })
