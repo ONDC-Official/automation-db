@@ -43,6 +43,8 @@ public class SessionDetailsController {
     public boolean checkSessionById(@PathVariable String sessionId) {
         return sessionDetailsService.checkSessionById(sessionId);
     }
+
+    @Transactional
     @PostMapping("/payload")
     public ResponseEntity<SessionDetails> createPayload(@RequestBody Payload payload) {
         SessionDetails sessionDetails = sdRepository.findBySessionId(payload.getSessionDetails().getSessionId())
