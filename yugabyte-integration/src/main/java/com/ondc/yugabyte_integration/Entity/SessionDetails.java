@@ -18,7 +18,6 @@ public class SessionDetails {
     @Enumerated(EnumType.STRING)
     private Type npType;
     private String npId;
-    private String transactionId;
     @Enumerated(EnumType.STRING)
     private Code domain;
     private String version;
@@ -74,16 +73,6 @@ public class SessionDetails {
         this.npId = npId;
     }
 
-    @Column(name = "transaction_id")
-    @OneToMany
-    public String getTransactionId() {
-        return transactionId;
-    }
-
-    public void setTransactionId(String transactionId) {
-        this.transactionId = transactionId;
-    }
-
     @Column(name = "domain")
     public Code getDomain() {
         return domain;
@@ -135,7 +124,6 @@ public class SessionDetails {
                 "sessionId='" + sessionId + '\'' +
                 ", npType=" + npType +
                 ", npId='" + npId + '\'' +
-                ", transactionId='" + transactionId + '\'' +
                 ", domain=" + domain +
                 ", version='" + version + '\'' +
                 ", sessionType=" + sessionType +
