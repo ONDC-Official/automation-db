@@ -23,6 +23,10 @@ public class SessionDetailsService {
         return sessionDetailsRepository.findById(sessionId);
     }
 
+    public boolean checkSessionById(String sessionId) {
+        return sessionDetailsRepository.existsById(sessionId);
+    }
+
     public SessionDetails createSession(SessionDetails sessionDetails) {
         return sessionDetailsRepository.save(sessionDetails);
     }

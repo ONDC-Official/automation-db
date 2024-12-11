@@ -38,6 +38,10 @@ public class SessionDetailsController {
                 .orElse(ResponseEntity.notFound().build());
     }
 
+    @GetMapping("/check/{sessionId}")
+    public boolean checkSessionById(@PathVariable String sessionId) {
+        return sessionDetailsService.checkSessionById(sessionId);
+    }
     @PostMapping("/payload")
     public ResponseEntity<SessionDetails> createPayload(@RequestBody Payload payload) {
         SessionDetails sessionDetails = sdRepository.findBySessionId(payload.getSessionDetails().getSessionId())

@@ -1,5 +1,6 @@
 package com.ondc.yugabyte_integration.Entity;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.ondc.yugabyte_integration.Service.MapToJsonConverter;
 import jakarta.persistence.*;
@@ -37,7 +38,8 @@ public class Payload {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "session_id", referencedColumnName = "sessionId")
-    @JsonIgnoreProperties("payloads")
+//    @JsonIgnoreProperties("payloads")
+    @JsonIgnore
     private SessionDetails sessionDetails;
 
     @PrePersist
