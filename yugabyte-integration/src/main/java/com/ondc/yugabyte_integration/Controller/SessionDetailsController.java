@@ -5,6 +5,7 @@ import com.ondc.yugabyte_integration.Entity.SessionDetails;
 import com.ondc.yugabyte_integration.Repository.PayloadRepository;
 import com.ondc.yugabyte_integration.Repository.SessionDetailsRepository;
 import com.ondc.yugabyte_integration.Service.SessionDetailsService;
+import jakarta.transaction.Transactional;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -57,6 +58,7 @@ public class SessionDetailsController {
     }
 
     @PostMapping
+    @Transactional
     public SessionDetails createSession(@RequestBody SessionDetails sessionDetails) {
         return sessionDetailsService.createSession(sessionDetails);
     }

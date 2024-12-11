@@ -2,6 +2,7 @@ package com.ondc.yugabyte_integration.Service;
 
 import com.ondc.yugabyte_integration.Entity.SessionDetails;
 import com.ondc.yugabyte_integration.Repository.SessionDetailsRepository;
+import jakarta.transaction.Transactional;
 import org.springframework.stereotype.Service;
 import java.util.List;
 import java.util.Optional;
@@ -27,6 +28,7 @@ public class SessionDetailsService {
         return sessionDetailsRepository.existsById(sessionId);
     }
 
+    @Transactional
     public SessionDetails createSession(SessionDetails sessionDetails) {
         return sessionDetailsRepository.save(sessionDetails);
     }
