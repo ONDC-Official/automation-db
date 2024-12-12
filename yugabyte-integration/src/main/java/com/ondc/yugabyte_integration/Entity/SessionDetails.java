@@ -18,8 +18,7 @@ public class SessionDetails {
     @Enumerated(EnumType.STRING)
     private Type npType;
     private String npId;
-    @Enumerated(EnumType.STRING)
-    private Code domain;
+    private String domain;
     private String version;
     @Enumerated(EnumType.STRING)
     private SessionType sessionType;
@@ -30,16 +29,6 @@ public class SessionDetails {
 
     public enum Type {
         BAP, BPP
-    }
-
-    public enum Code {
-        METRO ("TRV11");
-
-        public final String domainCode;
-
-        Code(String domainCode) {
-            this.domainCode = domainCode;
-        }
     }
 
     public enum SessionType {
@@ -74,11 +63,11 @@ public class SessionDetails {
     }
 
     @Column(name = "domain")
-    public Code getDomain() {
+    public String getDomain() {
         return domain;
     }
 
-    public void setDomain(Code domain) {
+    public void setDomain(String domain) {
         this.domain = domain;
     }
 
