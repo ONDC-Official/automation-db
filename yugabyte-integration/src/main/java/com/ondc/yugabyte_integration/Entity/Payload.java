@@ -28,9 +28,10 @@ public class Payload {
 
     @Convert(converter = MapToJsonConverter.class)
     @Column(columnDefinition = "text")
-    private Map<String, Object> jsonObject;
-
-    private Type type;
+    private Map<String, Object> jsonRequest;
+    @Convert(converter = MapToJsonConverter.class)
+    @Column(columnDefinition = "text")
+    private Map<String, Object> jsonResponse;
     private Integer httpStatus;
     private Timestamp createdAt;
     private Timestamp updatedAt;
@@ -123,13 +124,22 @@ public class Payload {
         this.action = action;
     }
 
-    @Column(name = "jsonObject")
-    public Map<String, Object> getJsonObject() {
-        return jsonObject;
+    @Column(name = "jsonRequest")
+    public Map<String, Object> getJsonRequest() {
+        return jsonRequest;
     }
 
-    public void setJsonObject(Map<String, Object> jsonObject) {
-        this.jsonObject = jsonObject;
+    public void setJsonRequest(Map<String, Object> jsonRequest) {
+        this.jsonRequest = jsonRequest;
+    }
+
+    @Column(name = "jsonResponse")
+    public Map<String, Object> getJsonResponse() {
+        return jsonResponse;
+    }
+
+    public void setJsonResponse(Map<String, Object> jsonResponse) {
+        this.jsonResponse = jsonResponse;
     }
 
     @Column(name = "bpp_id")
@@ -148,15 +158,6 @@ public class Payload {
 
     public void setBapId(String bapId) {
         this.bapId = bapId;
-    }
-
-    @Column(name = "type")
-    public Type getType() {
-        return type;
-    }
-
-    public void setType(Type type) {
-        this.type = type;
     }
 
     @Column(name = "http_status")

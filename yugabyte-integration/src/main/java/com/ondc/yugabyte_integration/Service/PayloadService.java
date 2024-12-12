@@ -44,8 +44,8 @@ public class PayloadService {
                     existingPayload.setAction(updatedPayload.getAction());
                     existingPayload.setBppId(updatedPayload.getBppId());
                     existingPayload.setBapId(updatedPayload.getBapId());
-                    existingPayload.setJsonObject(updatedPayload.getJsonObject());
-                    existingPayload.setType(updatedPayload.getType());
+                    existingPayload.setJsonRequest(updatedPayload.getJsonRequest());
+                    existingPayload.setJsonResponse(updatedPayload.getJsonResponse());
                     existingPayload.setHttpStatus(updatedPayload.getHttpStatus());
                     return repository.save(existingPayload);
                 })
