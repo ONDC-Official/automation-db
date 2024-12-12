@@ -52,5 +52,5 @@ jobs:
 
             # Run the new container
             # docker run -d --name automation-db -p 8080:8080 ${{ secrets.DOCKER_USERNAME }}/automation-db:latest
-             docker run -d  -e DB_URL=${{vars.YUGABYTE_DB_URL}} -e DB_PASSWORD=${{vars.YUGABYTE_PASSWORD}} -p 8080:8080 ${{ secrets.DOCKER_USERNAME }}/automation-db:latest
+             docker run -d --name automation-db -e DB_URL=${{vars.YUGABYTE_DB_URL}} -e DB_PASSWORD=${{vars.YUGABYTE_PASSWORD}} -p 8080:8080 ${{ secrets.DOCKER_USERNAME }}/automation-db:latest
           EOF
