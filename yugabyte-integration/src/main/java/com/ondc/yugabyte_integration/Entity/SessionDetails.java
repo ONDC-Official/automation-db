@@ -33,7 +33,7 @@ public class SessionDetails {
     }
 
     public enum Code {
-        TRV11 ("METRO");
+        METRO ("TRV11");
 
         public final String domainCode;
 
