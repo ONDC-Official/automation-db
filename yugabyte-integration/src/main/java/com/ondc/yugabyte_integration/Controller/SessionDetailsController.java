@@ -73,7 +73,6 @@ public class SessionDetailsController {
         return sessionDetails.getPayloads();
     }
 
-
     @PutMapping("/{sessionId}")
     public ResponseEntity<SessionDetails> updateSession(
             @PathVariable String sessionId,
@@ -90,19 +89,4 @@ public class SessionDetailsController {
         sessionDetailsService.deleteSession(sessionId);
         return ResponseEntity.noContent().build();
     }
-
-//    @GetMapping("/{sessionId}/details")
-//    public ResponseEntity<SessionDetails> getSessionWithPayloads(@PathVariable String sessionId) {
-//        return sessionDetailsService.getSessionWithPayloads(sessionId)
-//                .map(ResponseEntity::ok)
-//                .orElse(ResponseEntity.notFound().build());
-//    }
-
-//    public Optional<SessionDetails> getSessionWithPayloads(String sessionId) {
-//        Optional<SessionDetails> session = sessionDetailsRepository.findById(sessionId);
-//        session.ifPresent(s -> s.getPayloads().size()); // Force Hibernate to load payloads
-//        return session;
-//    }
-
-
 }
