@@ -1,6 +1,5 @@
 package com.ondc.yugabyte_integration.Entity;
 
-import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.ondc.yugabyte_integration.Service.MapToJsonConverter;
 import jakarta.persistence.*;
