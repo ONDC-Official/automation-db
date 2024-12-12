@@ -3,12 +3,16 @@ package com.ondc.yugabyte_integration.Service;
 import com.ondc.yugabyte_integration.Entity.SessionDetails;
 import com.ondc.yugabyte_integration.Repository.SessionDetailsRepository;
 import jakarta.transaction.Transactional;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import java.util.List;
 import java.util.Optional;
 
 @Service
 public class SessionDetailsService {
+
+    private final Logger Log = LoggerFactory.getLogger(SessionDetailsService.class);
 
     private final SessionDetailsRepository sessionDetailsRepository;
 
@@ -30,6 +34,7 @@ public class SessionDetailsService {
 
     @Transactional
     public SessionDetails createSession(SessionDetails sessionDetails) {
+        Log.info("Creating session - {}", sessionDetails);
         return sessionDetailsRepository.save(sessionDetails);
     }
 
