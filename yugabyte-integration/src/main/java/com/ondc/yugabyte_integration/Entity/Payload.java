@@ -195,4 +195,23 @@ public class Payload {
     public void setSessionDetails(SessionDetails sessionDetails) {
         this.sessionDetails = sessionDetails;
     }
+
+    @Override
+    public String toString() {
+        return "Payload{" +
+                "id=" + id +
+                ", messageId='" + messageId + '\'' +
+                ", transactionId='" + transactionId + '\'' +
+                ", flowId='" + flowId + '\'' +
+                ", action=" + action +
+                ", bppId='" + bppId + '\'' +
+                ", bapId='" + bapId + '\'' +
+                ", jsonRequest=" + jsonRequest +
+                ", jsonResponse=" + jsonResponse +
+                ", httpStatus=" + httpStatus +
+                ", createdAt=" + createdAt +
+                ", updatedAt=" + updatedAt +
+                ", sessionDetails=" + sessionDetails +
+                '}';
+    }
 }
