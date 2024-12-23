@@ -1,11 +1,15 @@
 package com.ondc.yugabyte_integration.Service;
 
+import com.ondc.yugabyte_integration.Entity.Payload;
+import com.ondc.yugabyte_integration.Entity.PayloadDetailsDTO;
 import com.ondc.yugabyte_integration.Entity.SessionDetails;
 import com.ondc.yugabyte_integration.Repository.SessionDetailsRepository;
 import jakarta.transaction.Transactional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
+
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
@@ -59,5 +63,16 @@ public class SessionDetailsService {
 
     public Optional<SessionDetails> getSessionWithPayloads(String sessionId) {
         return sessionDetailsRepository.findWithPayloadsBySessionId(sessionId);
+    }
+
+    public List<PayloadDetailsDTO> getPayloadDetails(String sessionId) {
+        SessionDetails sessionDetails = sessionDetailsRepository.findBySessionId(sessionId)
+                .orElseThrow(() -> new RuntimeException("SessionDetails not found for sessionId: " + sessionId));
+
+        List<PayloadDetailsDTO> payloadDetailsDTOS = new ArrayList<>();
+        for (Payload payload : sessionDetails.getPayloads()) {
+            payloadDetailsDTOS.add(new PayloadDetailsDTO(sessionDetails.getNpType(), sessionDetails.getDomain(), payload));
+        }
+        return payloadDetailsDTOS;
     }
 }

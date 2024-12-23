@@ -1,6 +1,7 @@
 package com.ondc.yugabyte_integration.Controller;
 
 import com.ondc.yugabyte_integration.Entity.Payload;
+import com.ondc.yugabyte_integration.Entity.PayloadDetailsDTO;
 import com.ondc.yugabyte_integration.Entity.SessionDetails;
 import com.ondc.yugabyte_integration.Repository.PayloadRepository;
 import com.ondc.yugabyte_integration.Repository.SessionDetailsRepository;
@@ -66,11 +67,8 @@ public class SessionDetailsController {
     }
 
     @GetMapping("/payload/{sessionId}")
-    public List<Payload> getPayloadBySessionId(@PathVariable String sessionId) {
-        SessionDetails sessionDetails = sdRepository.findBySessionId(sessionId)
-                .orElseThrow(() -> new RuntimeException("SessionDetails not found for sessionId: " + sessionId));
-        ;
-        return sessionDetails.getPayloads();
+    public List<PayloadDetailsDTO> getPayloadBySessionId(@PathVariable String sessionId) {
+        return sessionDetailsService.getPayloadDetails(sessionId);
     }
 
     @PutMapping("/{sessionId}")
