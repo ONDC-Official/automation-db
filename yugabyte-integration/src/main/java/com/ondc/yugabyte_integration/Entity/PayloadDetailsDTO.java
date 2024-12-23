@@ -1,16 +1,14 @@
 package com.ondc.yugabyte_integration.Entity;
 
-import java.util.List;
-
 public class PayloadDetailsDTO {
     private SessionDetails.Type npType;
     private String domain;
-    private Payload payloads;
+    private Payload payload;
 
-    public PayloadDetailsDTO(SessionDetails.Type npType, String domain, Payload payloads) {
+    public PayloadDetailsDTO(SessionDetails.Type npType, String domain, Payload payload) {
         this.npType = npType;
         this.domain = domain;
-        this.payloads = payloads;
+        this.payload = payload;
     }
 
     public SessionDetails.Type getNpType() {
@@ -29,11 +27,11 @@ public class PayloadDetailsDTO {
         this.domain = domain;
     }
 
-    public Payload getPayloads() {
-        return payloads;
+    public Payload getPayload() {
+        return payload;
     }
 
-    public void setPayloads(Payload payloads) {
-        this.payloads = payloads;
+    public void setPayload(Payload payload) {
+        this.payload = payload;
     }
 }
