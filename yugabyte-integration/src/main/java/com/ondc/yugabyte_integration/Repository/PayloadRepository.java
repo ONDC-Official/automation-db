@@ -10,7 +10,7 @@ import java.util.Optional;
 @Repository
 public interface PayloadRepository extends JpaRepository<Payload, Long> {
 
-    Optional<Payload> findByTransactionId(String transactionId);
+    List<Payload> findByTransactionId(String transactionId);
     List<Payload> findBySessionDetailsSessionId(String sessionId);
 
 }

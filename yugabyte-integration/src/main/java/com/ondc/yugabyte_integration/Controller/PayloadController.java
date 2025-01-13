@@ -46,9 +46,8 @@ public class PayloadController {
         service.deletePayload(id);
     }
 
-    @GetMapping("/{transactionId}")
-    public Payload getPayloadFromTransactionId(@PathVariable String transactionId) {
-        Optional<Payload> payload = service.getPayloadByTransactionId(transactionId);
-        return payload.orElse(null);
+    @GetMapping("/transaction/{transactionId}")
+    public List<Payload> getPayloadFromTransactionId(@PathVariable String transactionId) {
+        return service.getPayloadByTransactionId(transactionId);
     }
 }

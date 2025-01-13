@@ -36,7 +36,7 @@ public class Payload {
     private Timestamp createdAt;
     private Timestamp updatedAt;
 
-    @ManyToOne(fetch = FetchType.LAZY)
+    @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "session_id", referencedColumnName = "sessionId")
     @JsonIgnoreProperties({"payloads", "npType", "npId", "domain", "version", "sessionType", "sessionActive"})
     private SessionDetails sessionDetails;

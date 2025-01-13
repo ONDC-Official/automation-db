@@ -27,7 +27,9 @@ public class PayloadService {
         return repository.findById(id).orElse(null);
     }
 
-    public Optional<Payload> getPayloadByTransactionId(String transactionId) {
+    @Transactional
+    public List<Payload> getPayloadByTransactionId(String transactionId) {
+        Log.info("transactionId - {}", transactionId);
         return repository.findByTransactionId(transactionId);
     }
 
