@@ -70,7 +70,9 @@ public class Payload {
         STATUS("status"),
         ON_STATUS("on_status"),
         CANCEL("cancel"),
-        ON_CANCEL("on_cancel");
+        ON_CANCEL("on_cancel"),
+        UPDATE("update"),
+        ON_UPDATE("on_update");
 
         public final String action;
 
