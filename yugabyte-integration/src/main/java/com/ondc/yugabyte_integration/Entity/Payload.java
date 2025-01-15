@@ -20,6 +20,7 @@ public class Payload {
     private Long id;
     private String messageId;
     private String transactionId;
+    private String payloadId;
     private String flowId;
     @Enumerated(EnumType.STRING)
     private Action action;
@@ -106,6 +107,15 @@ public class Payload {
 
     public void setTransactionId(String transactionId) {
         this.transactionId = transactionId;
+    }
+
+    @Column(name = "payload_id")
+    public String getPayloadId() {
+        return payloadId;
+    }
+
+    public void setPayloadId(String payloadId) {
+        this.payloadId = payloadId;
     }
 
     @Column(name = "flowId")
