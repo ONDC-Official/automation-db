@@ -34,6 +34,12 @@ public class PayloadService {
     }
 
     @Transactional
+    public List<Payload> getPayloadByPayloadId(String payloadId) {
+        Log.info("payloadId - {}", payloadId);
+        return repository.findByPayloadId(payloadId);
+    }
+
+    @Transactional
     public Payload savePayload(Payload payload) {
         return repository.save(payload);
     }
