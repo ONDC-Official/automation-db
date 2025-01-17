@@ -11,6 +11,7 @@ import java.util.Optional;
 public interface PayloadRepository extends JpaRepository<Payload, Long> {
 
     List<Payload> findByTransactionId(String transactionId);
+    List<Payload> findByPayloadId(String payloadId);
     List<Payload> findBySessionDetailsSessionId(String sessionId);
 
 }
