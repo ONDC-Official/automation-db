@@ -50,4 +50,8 @@ public class PayloadController {
     public List<Payload> getPayloadFromTransactionId(@PathVariable String transactionId) {
         return service.getPayloadByTransactionId(transactionId);
     }
+    @GetMapping("/id/{payloadId}")
+    public List<Payload> getPayloadFromPayloadId(@PathVariable String payloadId) {
+        return service.getPayloadByPayloadId(payloadId);
+    }
 }
