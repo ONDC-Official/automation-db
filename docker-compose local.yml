@@ -1,0 +1,39 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: automation-db-service
+    ports:
+      - "5001:5001" 
+    env_file:
+      - .env 
+    environment:
+       DB_HOST: db
+       NODE_ENV: production
+    command: sh -c "npm run migration:run && npm start"
+    restart: always
+    networks:
+      - app-network
+
+  db:
+    image: postgres:latest
+    container_name: db-container
+    environment:
+      POSTGRES_USER: ${DB_USERNAME}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME}
+    ports:
+      - "2500:5432"
+    volumes:
+      # - ./src/migration:/docker-entrypoint-initdb.d 
+      - db_data:/var/lib/postgresql/data
+    restart: always
+    networks:
+      - app-network
+
+volumes:
+  db_data:
+
+networks:
+  app-network:

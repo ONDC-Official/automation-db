@@ -1,0 +1,13 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: automation-db-service
+    ports:
+      - "5001:5001" 
+    env_file:
+      - .env 
+    environment:
+       NODE_ENV: production
+    restart: always
