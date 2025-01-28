@@ -3,6 +3,7 @@ name: ONDC Automation DB Node Service Deployment
 on:
   push:
     branches: ["dev"]
+  workflow_dispatch:
 
 jobs:
   ssh-ec2:
