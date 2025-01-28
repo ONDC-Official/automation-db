@@ -2,7 +2,7 @@ name: ONDC Automation DB Service Deployment
 
 on:
   push:
-    branches: ["main"]
+    branches: ["dev"]
   workflow_dispatch:
 
 jobs:
