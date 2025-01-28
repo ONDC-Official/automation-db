@@ -7,7 +7,7 @@ import {
   updatePayload,
   deletePayload,
   getPayloadByTransactionId,
-  getPayloadByPayloadId
+  getPayloadByPayloadIds
 } from "../controllers/PayloadController";
 
 const router = Router();
@@ -18,7 +18,7 @@ router.post("/", createPayload);
 router.put("/:id", updatePayload);
 router.delete("/:id", deletePayload);
 router.get("/transaction/:transactionId", getPayloadByTransactionId);
-router.get("/id/:payloadId", getPayloadByPayloadId);
+router.post("/ids", getPayloadByPayloadIds);
 
 
 export default router;

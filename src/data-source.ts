@@ -2,12 +2,11 @@ import { DataSource } from "typeorm";
 import dotenv from "dotenv";
 import { Payload } from "./entity/Payload";
 import { SessionDetails } from "./entity/SessionDetails";
-import { User } from "./entity/User";
 
 // Initialize dotenv to load environment variables
 dotenv.config();
 
-const isProduction = process.env.NODE_ENV === "production";
+// const isProduction = process.env.NODE_ENV === "production";
 
 export const AppDataSource = new DataSource({
   type: "postgres", // or 'mysql', 'mariadb', 'sqlite', etc.
@@ -16,10 +15,10 @@ export const AppDataSource = new DataSource({
   username: process.env.DB_USERNAME,
   password: process.env.DB_PASSWORD,
   database: process.env.DB_NAME || "postgres", // Your DB name
-  synchronize: isProduction ? false : true, // Automatically synchronize database schema (don't use in production)
-  entities: [Payload, SessionDetails, User],
+  synchronize: true, // Automatically synchronize database schema (don't use in production)
+  entities: [Payload, SessionDetails],
   logging: true, // Set to true for SQL logs
-  migrations: [
-    isProduction ? "dist/migration/**/*.js" : "src/migration/**/*.ts",
-  ]
+  // migrations: [
+  //   isProduction ? "dist/migration/**/*.js" : "src/migration/**/*.ts",
+  // ]
 });

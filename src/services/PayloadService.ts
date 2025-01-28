@@ -1,4 +1,4 @@
-import { Repository } from "typeorm";
+import { In, Repository } from "typeorm";
 import { Payload } from "../entity/Payload"; // Adjust the path accordingly
 import { logger } from "../utils/logger"; // Importing logger utility
 
@@ -47,28 +47,32 @@ export class PayloadService {
   }
 
   /**
-   * Retrieves a specific payload by its payload ID.
-   * @param payloadId The payload ID of the payload.
-   * @returns Payload object or undefined if not found.
+   * Retrieves a list of payloads by its payload IDs.
+   * @param payloadIds An array of payload IDs to be fetched.
+   * @returns An array of Payload objects or undefined if not found.
    */
-  async getPayloadByPayloadId(payloadId: string): Promise<Payload | undefined> {
+  async getPayloadByPayloadIds(payloadIds: string[]): Promise<Payload[] | undefined> {
     try {
-      logger.info(`Fetching payload with payloadId: ${payloadId}`); // Log the action with transactionId
-      const payload = await this.payloadRepository.findOne({
-        where: { payloadId },
+      logger.info(`Fetching payloads with payloadIds: ${payloadIds}`); // Log the action with transactionId
+  
+      const payloads = await this.payloadRepository.find({
+        where: { payloadId: In(payloadIds) }, // Use the In operator to query multiple payloadIds
       });
-      if (!payload) {
-        logger.warn(`Payload with payloadId: ${payloadId} not found`); // Log warning if not found
+  
+      if (!payloads || payloads.length === 0) {
+        logger.warn(`No payloads found for payloadIds: ${payloadIds}`); // Log warning if not found
+        return undefined;
       } else {
-        logger.info(`Payload with payloadId: ${payloadId} found`); // Log if found
+        logger.info(`Payloads found for payloadIds: ${payloadIds}`); // Log if found
       }
-      return payload ?? undefined;
+  
+      return payloads;
     } catch (error) {
       logger.error(
-        `Error retrieving payload with payloadId: ${payloadId}`,
+        `Error retrieving payloads with payloadIds: ${payloadIds}`,
         error
       ); // Log error with transactionId
-      throw new Error("Error retrieving payload");
+      throw new Error("Error retrieving payloads");
     }
   }
 

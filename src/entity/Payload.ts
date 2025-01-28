@@ -40,6 +40,9 @@ export class Payload {
   @Column({ name: "bap_id", nullable: true })
   bapId?: string; // Optional, can be undefined
 
+  @Column({ name: "request_header", nullable: true })
+  reqHeader?: string; // Optional, can be undefined
+
   @Column("simple-json", { name: "json_request", nullable: true })
   jsonRequest?: Record<string, unknown>; // Optional, can be undefined
 
@@ -49,9 +52,6 @@ export class Payload {
   @Column({ name: "http_status", nullable: true })
   httpStatus?: number; // Optional, can be undefined
 
-
-  @Column({ name: "status", nullable: true })
-  status?: string; // Optional, can be undefined
 
   @CreateDateColumn({ name: "created_at" })
   createdAt!: Date; // Use definite assignment assertion

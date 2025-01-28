@@ -4,7 +4,8 @@
   "description": "This guide provides steps to integrate a NodeJs application with Postgres. Once configured, the payload table will be created in your database, and the provided APIs will allow interaction with the data.",
   "main": "index.js",
   "scripts": {
-    "dev": "npm run migration:generate && src/index.ts",
+    "dev1": "npm run migration:generate && src/index.ts",
+    "dev": "nodemon --exec ts-node src/index.ts",
     "start": "node dist/index.js",
     "build": "tsc",
     "typeorm": "typeorm-ts-node-commonjs",

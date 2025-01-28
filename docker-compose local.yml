@@ -10,7 +10,6 @@ services:
       - .env 
     environment:
        DB_HOST: db
-       NODE_ENV: production
     command: sh -c "npm run migration:run && npm start"
     restart: always
     networks:
