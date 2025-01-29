@@ -28,11 +28,10 @@ export class Payload {
   payloadId?: string; //mandatory
 
   @Column({
-    type: "enum",
-    enum: Action,
+    name: "action",
     nullable: true,
   })
-  action?: Action; // Optional, can be undefined
+  action?: string; // Optional, can be undefined
 
   @Column({ name: "bpp_id", nullable: true })
   bppId?: string; // Optional, can be undefined
