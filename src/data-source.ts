@@ -11,10 +11,10 @@ dotenv.config();
 export const AppDataSource = new DataSource({
   type: "postgres", // or 'mysql', 'mariadb', 'sqlite', etc.
   host: process.env.DB_HOST, // Your database host
-  port: 5432, // Your database port (5432 for PostgreSQL)
+  port: 5433, // Your database port
   username: process.env.DB_USERNAME,
   password: process.env.DB_PASSWORD,
-  database: process.env.DB_NAME || "postgres", // Your DB name
+  database: process.env.DB_NAME || "yugabytedb", // Your DB name
   synchronize: true, // Automatically synchronize database schema (don't use in production)
   entities: [Payload, SessionDetails],
   logging: true, // Set to true for SQL logs

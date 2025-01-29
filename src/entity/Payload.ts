@@ -25,7 +25,7 @@ export class Payload {
   flowId?: string; // Optional, can be undefined
 
   @Column({ name: "payload_id", nullable: false, unique:true })
-  payloadId?: string; // Optional, can be undefined
+  payloadId?: string; //mandatory
 
   @Column({
     type: "enum",
