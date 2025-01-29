@@ -109,7 +109,7 @@ export const deletePayload = async (req: Request, res: Response) => {
   try {
     logger.info(`Deleting payload with ID: ${id}`); // Log the deletion action
     await payloadService.deletePayload(Number(id));
-    res.status(204).send(); // Send no content response on successful deletion
+    res.status(200).send("Deleted successfully"); // Send no content response on successful deletion
   } catch (error) {
     logger.error(`Error deleting payload with ID: ${id}`, error); // Log error during payload deletion
     res.status(400).send("Error deleting payload"); // Send bad request response

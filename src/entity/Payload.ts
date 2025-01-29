@@ -24,7 +24,7 @@ export class Payload {
   @Column({ name: "flow_id", nullable: true })
   flowId?: string; // Optional, can be undefined
 
-  @Column({ name: "payload_id", nullable: true })
+  @Column({ name: "payload_id", nullable: false, unique:true })
   payloadId?: string; // Optional, can be undefined
 
   @Column({
