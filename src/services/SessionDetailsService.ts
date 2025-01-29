@@ -39,6 +39,7 @@ export class SessionDetailsService {
       const sessionDetailsRepository = this.dataSource.getRepository(SessionDetails);
       const sessionDetails = await sessionDetailsRepository.findOne({
         where: { sessionId },
+        relations: ["payloads"],
       });
       if (!sessionDetails) {
         logger.warn(`Session with ID: ${sessionId} not found`); // Log warning if not found
