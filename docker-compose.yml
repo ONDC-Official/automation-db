@@ -3,7 +3,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: automation-db-service
+    container_name: automation-db-service-staging
     ports:
       - "${PORT:-5001}:${PORT:-5001}" 
     env_file:
