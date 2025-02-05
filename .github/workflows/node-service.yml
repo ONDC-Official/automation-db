@@ -2,7 +2,7 @@ name: ONDC Automation DB Node Service Deployment
 
 on:
   push:
-    branches: ["staging"]
+    branches: ["release-staging"]
   workflow_dispatch:
 
 jobs:
@@ -28,15 +28,15 @@ jobs:
           REPO_DIR=~/ONDC-automation-framework-staging/automation-db
           echo "Removing existing repository directory if exists"
           rm -rf \$REPO_DIR
-          echo "Cloning repository from staging branch"
-          git clone --single-branch --branch staging https://github.com/ONDC-Official/automation-db.git \$REPO_DIR
+          echo "Cloning repository from release-staging branch"
+          git clone --single-branch --branch release-staging https://github.com/ONDC-Official/automation-db.git \$REPO_DIR
           EOF
 
       - name: Install Docker Compose (if not installed)
         run: |
           ssh -i ./key.pem ${{ secrets.USER }}@${{ secrets.HOST }} <<EOF
           # Check if Docker Compose is installed
-          if ! command -v docker-compose &> /staging/null
+          if ! command -v docker-compose &> /release-staging/null
           then
             echo "Docker Compose not found. Installing..."
             sudo curl -L "https://github.com/docker/compose/releases/download/$(curl -s https://api.github.com/repos/docker/compose/releases/latest | jq -r .tag_name)/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
