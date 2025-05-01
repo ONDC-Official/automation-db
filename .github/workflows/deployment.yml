@@ -1,0 +1,194 @@
+name: ONDC Automation-DB service Deployment
+
+on:
+  push:
+    branches: 
+      - main
+      - release-staging
+  workflow_dispatch:
+
+jobs:
+  deploy-main:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: SSH Setup and Cloning Repository
+        run: |
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ./key.pem
+          chmod 600 ./key.pem
+          mkdir -p ~/.ssh
+          ssh-keyscan -H ${{ secrets.HOST }} >> ~/.ssh/known_hosts
+
+          ssh -i ./key.pem ${{ secrets.USER }}@${{ secrets.HOST }} -T <<EOF
+          REPO_DIR=~/ONDC-automation-framework/automation-db
+          echo "Removing existing repository directory if exists"
+          rm -rf \$REPO_DIR
+          echo "Cloning repository from main branch"
+          git clone --single-branch --branch main https://github.com/ONDC-Official/automation-db.git \$REPO_DIR
+          EOF
+
+      - name: Install Docker Compose (if not installed)
+        run: |
+          ssh -i ./key.pem ${{ secrets.USER }}@${{ secrets.HOST }} <<EOF
+          # Check if Docker Compose is installed
+          if ! command -v docker-compose &> /main/null
+          then
+            echo "Docker Compose not found. Installing..."
+            sudo curl -L "https://github.com/docker/compose/releases/download/$(curl -s https://api.github.com/repos/docker/compose/releases/latest | jq -r .tag_name)/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+            sudo chmod +x /usr/local/bin/docker-compose
+          else
+            echo "Docker Compose is already installed."
+          fi
+          EOF
+
+      - name: Write secrets to .env on EC2
+        run: |
+          echo "Writing secrets to .env file"
+          ssh -i ./key.pem ${{ secrets.USER }}@${{ secrets.HOST }} <<EOF
+          REPO_DIR=~/ONDC-automation-framework/automation-db
+          echo "Writing environment variables to .env file"
+          echo "DB_HOST=${{ vars.DB_HOST }}" >> \$REPO_DIR/.env
+          echo "DB_USERNAME=${{ vars.DB_USERNAME }}" >> \$REPO_DIR/.env
+          echo "DB_PASSWORD=${{ secrets.DB_PASSWORD }}" >> \$REPO_DIR/.env
+          echo "DB_NAME=${{ vars.DB_NAME }}" >> \$REPO_DIR/.env
+          echo "DB_PORT=${{ vars.DB_PORT }}" >> \$REPO_DIR/.env
+          echo "PORT=${{ vars.PORT }}" >> \$REPO_DIR/.env
+          EOF
+
+      - name: Verify .env and docker-compose.yml files
+        run: |
+          ssh -i ./key.pem ${{ secrets.USER }}@${{ secrets.HOST }} <<EOF
+          REPO_DIR=~/ONDC-automation-framework/automation-db
+          # Check if .env and docker-compose.yml files exist
+          if [ ! -f \$REPO_DIR/.env ]; then
+            echo ".env file not found in \$REPO_DIR!"
+            exit 1
+          fi
+          if [ ! -f \$REPO_DIR/docker-compose.yml ]; then
+            echo "docker-compose.yml file not found in \$REPO_DIR!"
+            exit 1
+          fi
+          echo ".env and docker-compose.yml files found."
+          EOF
+
+      - name: Automation Mock Server Deployment
+        run: |
+          echo "Deploying with Docker Compose"
+          ssh -i ./key.pem ${{ secrets.USER }}@${{ secrets.HOST }} <<EOF
+          REPO_DIR=~/ONDC-automation-framework/automation-db
+          cd \$REPO_DIR
+
+          # Ensure the .env and docker-compose.yml files exist
+          if [ ! -f .env ]; then
+            echo ".env file not found!"
+            exit 1
+          fi
+
+          if [ ! -f docker-compose.yml ]; then
+            echo "docker-compose.yml file not found!"
+            exit 1
+          fi
+
+          # Start the containers using Docker Compose
+          echo "Running docker-compose up -d --build"
+          sudo docker compose up -d --build
+          EOF
+  deploy-staging:
+    if: github.ref == 'refs/heads/release-staging'
+    runs-on: ubuntu-latest
+    environment: 
+          name: staging
+          url: https://github.com
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+
+      - name: SSH Setup and Cloning Repository
+        run: |
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ./key.pem
+          chmod 600 ./key.pem
+          mkdir -p ~/.ssh
+          ssh-keyscan -H ${{ secrets.HOST }} >> ~/.ssh/known_hosts
+
+          ssh -i ./key.pem ${{ secrets.USER }}@${{ secrets.HOST }} -T <<EOF
+          REPO_DIR=~/ONDC-automation-framework-staging/automation-db
+          echo "Removing existing repository directory if exists"
+          rm -rf \$REPO_DIR
+          echo "Cloning repository from release-staging branch"
+          git clone --single-branch --branch release-staging https://github.com/ONDC-Official/automation-db.git \$REPO_DIR
+          EOF
+
+      - name: Install Docker Compose (if not installed)
+        run: |
+          ssh -i ./key.pem ${{ secrets.USER }}@${{ secrets.HOST }} <<EOF
+          # Check if Docker Compose is installed
+          if ! command -v docker-compose &> /release-staging/null
+          then
+            echo "Docker Compose not found. Installing..."
+            sudo curl -L "https://github.com/docker/compose/releases/download/$(curl -s https://api.github.com/repos/docker/compose/releases/latest | jq -r .tag_name)/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+            sudo chmod +x /usr/local/bin/docker-compose
+          else
+            echo "Docker Compose is already installed."
+          fi
+          EOF
+
+      - name: Write secrets to .env on EC2
+        run: |
+          echo "Writing secrets to .env file"
+          ssh -i ./key.pem ${{ secrets.USER }}@${{ secrets.HOST }} <<EOF
+          REPO_DIR=~/ONDC-automation-framework-staging/automation-db
+          echo "Writing environment variables to .env file"
+          echo "DB_HOST=${{ vars.DB_HOST }}" >> \$REPO_DIR/.env
+          echo "DB_USERNAME=${{ vars.DB_USERNAME }}" >> \$REPO_DIR/.env
+          echo "DB_PASSWORD=${{ secrets.DB_PASSWORD }}" >> \$REPO_DIR/.env
+          echo "DB_NAME=${{ vars.DB_NAME }}" >> \$REPO_DIR/.env
+          echo "DB_PORT=${{ vars.DB_PORT }}" >> \$REPO_DIR/.env
+          echo "PORT=${{ vars.PORT }}" >> \$REPO_DIR/.env
+          EOF
+
+      - name: Verify .env and docker-compose.yml files
+        run: |
+          ssh -i ./key.pem ${{ secrets.USER }}@${{ secrets.HOST }} <<EOF
+          REPO_DIR=~/ONDC-automation-framework-staging/automation-db
+          # Check if .env and docker-compose.yml files exist
+          if [ ! -f \$REPO_DIR/.env ]; then
+            echo ".env file not found in \$REPO_DIR!"
+            exit 1
+          fi
+          if [ ! -f \$REPO_DIR/docker-compose.yml ]; then
+            echo "docker-compose.yml file not found in \$REPO_DIR!"
+            exit 1
+          fi
+          echo ".env and docker-compose.yml files found."
+          EOF
+
+      - name: Automation Mock Server Deployment
+        run: |
+          echo "Deploying with Docker Compose"
+          ssh -i ./key.pem ${{ secrets.USER }}@${{ secrets.HOST }} <<EOF
+          REPO_DIR=~/ONDC-automation-framework-staging/automation-db
+          cd \$REPO_DIR
+
+          # Ensure the .env and docker-compose.yml files exist
+          if [ ! -f .env ]; then
+            echo ".env file not found!"
+            exit 1
+          fi
+
+          if [ ! -f docker-compose.yml ]; then
+            echo "docker-compose.yml file not found!"
+            exit 1
+          fi
+
+          # Start the containers using Docker Compose
+          echo "Running docker-compose up -d --build"
+          sudo docker compose -p automation-staging up -d --build
+          EOF
+
+
+
