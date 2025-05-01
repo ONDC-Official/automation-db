@@ -82,26 +82,54 @@ export const createSession = async (req: Request, res: Response) => {
 /**
  * Creates a payload for an existing session by sessionId
  */
+// export const createPayloadForSession = async (req: Request, res: Response) => {
+//   const payload = req.body;
+
+//   try {
+//     logger.info("Creating payload for session", { payload }); // Log the payload being created
+//     const sessionDetails = await sessionDetailsRepository.findOneByOrFail({
+//       sessionId: payload?.sessionDetails?.sessionId,
+//     });
+
+//     // Add the payload to the session's payload list
+//     const payloadList = sessionDetails.payloads || [];
+//     payloadList.push(payload);    
+//     sessionDetails.payloads = payloadList;
+
+//     // Save the updated session
+//     const updatedSession = await sessionDetailsRepository.save(sessionDetails);
+//     res.json(updatedSession); // Return the updated session as JSON response
+//   } catch (error:any) {
+//     logger.error("Error creating payload for session", error); // Log error with details
+//     res.status(404).send(`${error?.message}`); // Send session not found error
+//   }
+// };
+
+
 export const createPayloadForSession = async (req: Request, res: Response) => {
-  const payload = req.body;
+  const payloadData = req.body;
 
   try {
-    logger.info("Creating payload for session", { payload }); // Log the payload being created
+    logger.info("Creating payload for session", { payloadData });
+
+    // 1. Find the session
     const sessionDetails = await sessionDetailsRepository.findOneByOrFail({
-      sessionId: payload.sessionDetails.sessionId,
+      sessionId: payloadData?.sessionDetails?.sessionId,
     });
 
-    // Add the payload to the session's payload list
-    const payloadList = sessionDetails.payloads || [];
-    payloadList.push(payload);
-    sessionDetails.payloads = payloadList;
+    // 2. Create a proper Payload entity instance
+    const newPayload = payloadRepository.create({
+      ...payloadData,
+      sessionDetails, // This links it via the relation
+    });
 
-    // Save the updated session
-    const updatedSession = await sessionDetailsRepository.save(sessionDetails);
-    res.json(updatedSession); // Return the updated session as JSON response
-  } catch (error:any) {
-    logger.error("Error creating payload for session", error); // Log error with details
-    res.status(404).send(`${error?.message}`); // Send session not found error
+    // 3. Save the payload directly
+    await payloadRepository.save(newPayload);
+
+    res.json(newPayload); // Return the saved payload
+  } catch (error: any) {
+    logger.error("Error creating payload for session", error);
+    res.status(400).send(error?.message || "Error creating payload");
   }
 };
 

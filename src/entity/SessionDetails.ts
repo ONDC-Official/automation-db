@@ -39,9 +39,6 @@ import { SessionType, Type } from "./ActionEnums";
     })
     sessionType!: SessionType;
   
-    @Column({ name: "is_session_active", type: "boolean" })
-    isSessionActive!: boolean;
-  
     @OneToMany(() => Payload, (payload) => payload.sessionDetails, {
       eager: false,
       cascade: true,

@@ -25,14 +25,13 @@ export class Payload {
   flowId?: string; // Optional, can be undefined
 
   @Column({ name: "payload_id", nullable: false, unique:true })
-  payloadId?: string; //mandatory
+  payloadId!: string; //mandatory
 
   @Column({
-    type: "enum",
-    enum: Action,
+    name: "action",
     nullable: true,
   })
-  action?: Action; // Optional, can be undefined
+  action?: string; // Optional, can be undefined
 
   @Column({ name: "bpp_id", nullable: true })
   bppId?: string; // Optional, can be undefined
@@ -58,6 +57,9 @@ export class Payload {
 
   @UpdateDateColumn({ name: "updated_at" })
   updatedAt!: Date; // Use definite assignment assertion
+
+  @Column({ name: "session_id", nullable: true })
+  sessionId?: string;
 
   @ManyToOne(
     () => SessionDetails,
