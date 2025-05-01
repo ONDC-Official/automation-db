@@ -11,7 +11,7 @@ dotenv.config();
 export const AppDataSource = new DataSource({
   type: "postgres", // or 'mysql', 'mariadb', 'sqlite', etc.
   host: process.env.DB_HOST, // Your database host
-  port: 5433, // Your database port
+  port: parseInt(process.env.DB_PORT as string), // Your database port
   username: process.env.DB_USERNAME,
   password: process.env.DB_PASSWORD,
   database: process.env.DB_NAME || "yugabytedb", // Your DB name
