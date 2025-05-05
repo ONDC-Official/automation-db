@@ -1,4 +1,5 @@
 // src/index.ts
+require("./config/otelConfig")
 import express from "express";
 import { AppDataSource } from "./data-source"; // Database connection
 import routes from "./routes/routes"; // Import the combined routes
