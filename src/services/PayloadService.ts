@@ -1,7 +1,8 @@
 import { In, Repository } from "typeorm";
 import { Payload } from "../entity/Payload"; // Adjust the path accordingly
 import { logger } from "../utils/logger"; // Importing logger utility
-
+import { MongoPayload } from "../models/MongoPayload";
+import {hydratePayloadsWithMongoJson, hydrateSinglePayloadWithMongoJson, deletePayloadsFromMongo} from "../controllers/MongoPayloadController"
 export class PayloadService {
   private payloadRepository: Repository<Payload>;
 
@@ -18,7 +19,8 @@ export class PayloadService {
       logger.info("Fetching all payloads from database"); // Log the action
       const payloads = await this.payloadRepository.find();
       logger.info(`Found ${payloads.length} payload(s)`); // Log how many payloads were found
-      return payloads;
+      const payloadsWithJson = await hydratePayloadsWithMongoJson(payloads)
+      return payloadsWithJson;
     } catch (error) {
       logger.error("Error retrieving all payloads", error); // Log any error
       throw new Error("Error retrieving all payloads");
@@ -36,10 +38,12 @@ export class PayloadService {
       const payload = await this.payloadRepository.findOne({ where: { id } });
       if (!payload) {
         logger.warn(`Payload with ID: ${id} not found`); // Log warning if payload not found
+        return null
       } else {
         logger.info(`Payload with ID: ${id} found`); // Log if payload is found
       }
-      return payload;
+      const payloadWithJson = await hydrateSinglePayloadWithMongoJson(payload)
+      return payloadWithJson;
     } catch (error) {
       logger.error(`Error retrieving payload with ID: ${id}`, error); // Log error with ID
       throw new Error("Error retrieving payload");
@@ -65,8 +69,8 @@ export class PayloadService {
       } else {
         logger.info(`Payloads found for payloadIds: ${payloadIds}`); // Log if found
       }
-  
-      return payloads;
+      const payloadsWithJson = await hydratePayloadsWithMongoJson(payloads)
+      return payloadsWithJson;
     } catch (error) {
       logger.error(
         `Error retrieving payloads with payloadIds: ${payloadIds}`,
@@ -91,10 +95,12 @@ export class PayloadService {
       });
       if (!payload) {
         logger.warn(`Payload with transactionId: ${transactionId} not found`); // Log warning if not found
+        return undefined
       } else {
         logger.info(`Payload with transactionId: ${transactionId} found`); // Log if found
       }
-      return payload ?? undefined;
+      const payloadWithJson = hydrateSinglePayloadWithMongoJson(payload)
+      return payloadWithJson
     } catch (error) {
       logger.error(
         `Error retrieving payload with transactionId: ${transactionId}`,
@@ -111,6 +117,14 @@ export class PayloadService {
   async savePayload(payload: Payload): Promise<Payload> {
     try {
       logger.info("Saving new payload", { payload }); // Log the payload data being saved
+      if (payload.jsonRequest) {
+        const mongoReq = await MongoPayload.create({ data: payload.jsonRequest });
+        payload.jsonRequest = mongoReq._id.toString(); // Replace with Mongo ID
+      }
+      if (payload.jsonResponse) {
+        const mongoRes = await MongoPayload.create({ data: payload.jsonResponse });
+        payload.jsonResponse = mongoRes._id.toString(); // Replace with Mongo ID
+      }
       const savedPayload = await this.payloadRepository.save(payload);
       logger.info(`Payload saved successfully with ID: ${savedPayload.id}`); // Log the successful save
       return savedPayload;
@@ -171,7 +185,7 @@ export class PayloadService {
         logger.warn(`Payload with ID: ${id} does not exist`); // Log that the payload was not found
         throw new Error(`Payload with ID: ${id} not found`);
       }
-  
+      await deletePayloadsFromMongo(payload.jsonRequest,payload.jsonResponse)
       // Proceed with deletion
       await this.payloadRepository.delete(id);
       logger.info(`Payload with ID: ${id} deleted successfully`); // Log successful deletion

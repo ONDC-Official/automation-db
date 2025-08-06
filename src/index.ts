@@ -5,9 +5,10 @@ import { AppDataSource } from "./data-source"; // Database connection
 import routes from "./routes/routes"; // Import the combined routes
 import dotenv from "dotenv";
 import { logger } from "./utils/logger";
+dotenv.config();
+import { connectMongo } from "./config/mongo";
 
 // Initialize dotenv to load environment variables
-dotenv.config();
 
 const app = express();
 const port = process.env.PORT || 5001;
@@ -20,7 +21,7 @@ async function initializeApp() {
   try {
     // Establish the database connection
     const connection = await AppDataSource.initialize();
-
+    const mongo_connection = await connectMongo();
     logger.info("Database connection established successfully!");
 
     // Register all routes

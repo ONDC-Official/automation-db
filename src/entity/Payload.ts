@@ -8,7 +8,6 @@ import {
   JoinColumn,
 } from "typeorm";
 import { SessionDetails } from "./SessionDetails";
-import { Action } from "./ActionEnums";
 
 @Entity({ name: "payload" })
 export class Payload {
@@ -42,11 +41,11 @@ export class Payload {
   @Column({ name: "request_header", nullable: true })
   reqHeader?: string; // Optional, can be undefined
 
-  @Column("simple-json", { name: "json_request", nullable: true })
-  jsonRequest?: Record<string, unknown>; // Optional, can be undefined
+  @Column("text", { name: "json_request", nullable: true })
+  jsonRequest?: string;
 
-  @Column("simple-json", { name: "json_response", nullable: true })
-  jsonResponse?: Record<string, unknown>; // Optional, can be undefined
+  @Column("text", { name: "json_response", nullable: true })
+  jsonResponse?: string;
 
   @Column({ name: "http_status", nullable: true })
   httpStatus?: number; // Optional, can be undefined

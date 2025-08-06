@@ -5,6 +5,7 @@ import { SessionDetails } from "../entity/SessionDetails";
 import { Payload } from "../entity/Payload";
 import { PayloadDetailsDTO } from "../entity/PayloadDetailsDTO";
 import {logger} from "../utils/logger"; // Import the logger utility for logging
+import { MongoPayload } from "../models/MongoPayload";
 
 const sessionDetailsService = new SessionDetailsService(AppDataSource);
 
@@ -116,7 +117,14 @@ export const createPayloadForSession = async (req: Request, res: Response) => {
     const sessionDetails = await sessionDetailsRepository.findOneByOrFail({
       sessionId: payloadData?.sessionDetails?.sessionId,
     });
-
+    if (payloadData.jsonRequest) {
+      const mongoReq = await MongoPayload.create({ data: payloadData.jsonRequest });
+      payloadData.jsonRequest = mongoReq._id.toString(); // Replace with Mongo ID
+    }
+    if (payloadData.jsonResponse) {
+      const mongoRes = await MongoPayload.create({ data: payloadData.jsonResponse });
+      payloadData.jsonResponse = mongoRes._id.toString(); // Replace with Mongo ID
+    }
     // 2. Create a proper Payload entity instance
     const newPayload = payloadRepository.create({
       ...payloadData,
