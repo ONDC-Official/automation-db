@@ -61,6 +61,9 @@ export class Payload {
   @Column({ name: "session_id", nullable: true })
   sessionId?: string;
 
+  @Column({ nullable: true })
+  action_id?: string;
+
   @ManyToOne(
     () => SessionDetails,
     (sessionDetails) => sessionDetails.payloads,
