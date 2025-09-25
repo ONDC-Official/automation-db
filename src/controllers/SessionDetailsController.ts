@@ -4,7 +4,7 @@ import { SessionDetailsService } from "../services/SessionDetailsService";
 import { SessionDetails } from "../entity/SessionDetails";
 import { Payload } from "../entity/Payload";
 import { PayloadDetailsDTO } from "../entity/PayloadDetailsDTO";
-import {logger} from "../utils/logger"; // Import the logger utility for logging
+import logger from '../utils/logger'; // Import the logger utility for logging
 
 const sessionDetailsService = new SessionDetailsService(AppDataSource);
 

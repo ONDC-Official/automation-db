@@ -2,7 +2,7 @@ import { DataSource } from "typeorm";
 import { SessionDetails } from "../entity/SessionDetails";
 import { PayloadDetailsDTO } from "../entity/PayloadDetailsDTO";
 import { Payload } from "../entity/Payload";
-import {logger} from "../utils/logger"; // Importing logger utility
+import logger from '../utils/logger'; // Importing logger utility
 
 export class SessionDetailsService {
   private dataSource: DataSource;

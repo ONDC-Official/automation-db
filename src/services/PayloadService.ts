@@ -1,6 +1,6 @@
 import { In, Repository } from "typeorm";
 import { Payload } from "../entity/Payload"; // Adjust the path accordingly
-import { logger } from "../utils/logger"; // Importing logger utility
+import logger from '../utils/logger'; // Importing logger utility
 
 export class PayloadService {
   private payloadRepository: Repository<Payload>;

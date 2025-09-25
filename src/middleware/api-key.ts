@@ -1,11 +1,11 @@
 import { Request, Response, NextFunction } from "express";
-import { logError } from "../utils/logger";
+import logger from "../utils/logger";
 export default (req: Request, res: Response, next: NextFunction) => {
     const clientApiKey = req.get("x-api-key");
     const serverApiKey = process.env.API_SERVICE_KEY;
 
     if(!serverApiKey) {
-        logError({
+        logger.error({
             message: "API key is not set in the environment variables"
         });
         throw new Error("API key is not set in the environment variables");

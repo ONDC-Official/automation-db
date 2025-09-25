@@ -1,7 +1,7 @@
 import { Request, Response } from "express";
 import { PayloadService } from "../services/PayloadService";
 import { payloadRepository } from "../controllers/SessionDetailsController";
-import { logger } from "../utils/logger"; // Importing logger utility
+import logger from '../utils/logger'; // Importing logger utility
 
 const payloadService = new PayloadService(payloadRepository);
 

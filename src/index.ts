@@ -4,7 +4,7 @@ import express from "express";
 import { AppDataSource } from "./data-source"; // Database connection
 import routes from "./routes/routes"; // Import the combined routes
 import dotenv from "dotenv";
-import { logger } from "./utils/logger";
+import logger from "./utils/logger"
 
 // Initialize dotenv to load environment variables
 dotenv.config();
