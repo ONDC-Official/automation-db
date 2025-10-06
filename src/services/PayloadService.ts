@@ -1,6 +1,6 @@
 import { In, Repository } from "typeorm";
 import { Payload } from "../entity/Payload"; // Adjust the path accordingly
-import logger from '../utils/logger'; // Importing logger utility
+import logger from "../utils/logger"; // Importing logger utility
 
 export class PayloadService {
   private payloadRepository: Repository<Payload>;
@@ -51,21 +51,23 @@ export class PayloadService {
    * @param payloadIds An array of payload IDs to be fetched.
    * @returns An array of Payload objects or undefined if not found.
    */
-  async getPayloadByPayloadIds(payloadIds: string[]): Promise<Payload[] | undefined> {
+  async getPayloadByPayloadIds(
+    payloadIds: string[]
+  ): Promise<Payload[] | undefined> {
     try {
       logger.info(`Fetching payloads with payloadIds: ${payloadIds}`); // Log the action with transactionId
-  
+
       const payloads = await this.payloadRepository.find({
         where: { payloadId: In(payloadIds) }, // Use the In operator to query multiple payloadIds
       });
-  
+
       if (!payloads || payloads.length === 0) {
         logger.warn(`No payloads found for payloadIds: ${payloadIds}`); // Log warning if not found
         return undefined;
       } else {
         logger.info(`Payloads found for payloadIds: ${payloadIds}`); // Log if found
       }
-  
+
       return payloads;
     } catch (error) {
       logger.error(
@@ -164,20 +166,45 @@ export class PayloadService {
   async deletePayload(id: number): Promise<void> {
     try {
       logger.info(`Attempting to delete payload with ID: ${id}`); // Log the deletion action
-  
+
       // Check if the payload exists
       const payload = await this.payloadRepository.findOne({ where: { id } });
       if (!payload) {
         logger.warn(`Payload with ID: ${id} does not exist`); // Log that the payload was not found
         throw new Error(`Payload with ID: ${id} not found`);
       }
-  
+
       // Proceed with deletion
       await this.payloadRepository.delete(id);
       logger.info(`Payload with ID: ${id} deleted successfully`); // Log successful deletion
-    } catch (error:any) {
+    } catch (error: any) {
       logger.error(`Error deleting payload with ID: ${id}`, error?.message); // Log error during deletion
       throw new Error("Error deleting payload");
+    }
+  }
+  async getPayloadsByTransactionId(transactionId: string): Promise<Payload[]> {
+    try {
+      logger.info(`Fetching all payloads with transactionId: ${transactionId}`);
+
+      const payloads = await this.payloadRepository.find({
+        where: { transactionId },
+      });
+
+      if (!payloads || payloads.length === 0) {
+        logger.warn(`No payloads found for transactionId: ${transactionId}`);
+      } else {
+        logger.info(
+          `Found ${payloads.length} payload(s) for transactionId: ${transactionId}`
+        );
+      }
+
+      return payloads;
+    } catch (error) {
+      logger.error(
+        `Error retrieving payloads with transactionId: ${transactionId}`,
+        error
+      );
+      throw new Error("Error retrieving payloads");
     }
   }
 }

@@ -13,12 +13,10 @@ export class PayloadRepository {
     return this.repository.findOne({ where: { transactionId } });
   }
 
-    // Find Payload by transactionId
-    async findByPayloadId(payloadId: string): Promise<Payload | null> {
-      return this.repository.findOne({ where: { payloadId } });
-    }
-  
-
+  // Find Payload by transactionId
+  async findByPayloadId(payloadId: string): Promise<Payload | null> {
+    return this.repository.findOne({ where: { payloadId } });
+  }
   // Find Payload by sessionId
   async findBySessionDetailsSessionId(sessionId: string): Promise<Payload[]> {
     return this.repository.find({ where: { sessionDetails: { sessionId } } });
