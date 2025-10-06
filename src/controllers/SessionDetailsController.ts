@@ -1,184 +1,135 @@
 import { Request, Response } from "express";
-import { AppDataSource } from "../data-source";
+import { SessionDetailsRepository } from "../repositories/SessionDetailsRepository";
+import { PayloadRepository } from "../repositories/PayloadRepository";
+import logger from "../utils/logger";
 import { SessionDetailsService } from "../services/SessionDetailsService";
-import { SessionDetails } from "../entity/SessionDetails";
-import { Payload } from "../entity/Payload";
-import { PayloadDetailsDTO } from "../entity/PayloadDetailsDTO";
-import logger from '../utils/logger'; // Import the logger utility for logging
 
-const sessionDetailsService = new SessionDetailsService(AppDataSource);
-
-// Repositories to interact with the database
-const sessionDetailsRepository = AppDataSource.getRepository(SessionDetails);
-export const payloadRepository = AppDataSource.getRepository(Payload);
+// Instantiate repositories and service
+const sessionRepo = new SessionDetailsRepository();
+const payloadRepo = new PayloadRepository();
+const sessionDetailsService = new SessionDetailsService(sessionRepo, payloadRepo);
 
 /**
- * Fetches all session details
+ * Fetch all sessions
  */
 export const getAllSessions = async (req: Request, res: Response) => {
   try {
-    logger.info("Fetching all sessions"); // Log the action
+    logger.info("Fetching all sessions");
     const sessions = await sessionDetailsService.getAllSessions();
-    res.json(sessions); // Return sessions as JSON response
+    res.json(sessions);
   } catch (error) {
-    logger.error("Error retrieving sessions: ", error); // Log error with details
-    res.status(500).send("Error retrieving sessions"); // Send internal server error
+    logger.error("Error retrieving sessions", error);
+    res.status(500).send("Error retrieving sessions");
   }
 };
 
 /**
- * Fetches session details by sessionId
+ * Fetch session by sessionId
  */
 export const getSessionById = async (req: Request, res: Response) => {
   const { sessionId } = req.params;
-
   try {
-    logger.info(`Fetching session with ID: ${sessionId}`); // Log the action with sessionId
+    logger.info(`Fetching session with ID: ${sessionId}`);
     const session = await sessionDetailsService.getSessionById(sessionId);
     if (session) {
-      res.json(session); // Return session details if found
+      res.json(session);
     } else {
-      logger.warn(`Session with ID: ${sessionId} not found`); // Log warning if session not found
-      res.status(404).send("Session not found"); // Send session not found response
+      logger.warn(`Session not found with ID: ${sessionId}`);
+      res.status(404).send("Session not found");
     }
   } catch (error) {
-    logger.error(`Error retrieving session with ID: ${sessionId}`, error); // Log error with sessionId
-    res.status(400).send("Error retrieving session"); // Send bad request response
+    logger.error(`Error retrieving session with ID: ${sessionId}`, error);
+    res.status(400).send("Error retrieving session");
   }
 };
 
 /**
- * Checks if a session exists by sessionId
+ * Check if a session exists
  */
 export const checkSessionById = async (req: Request, res: Response) => {
   const { sessionId } = req.params;
-
   try {
-    logger.info(`Checking existence of session with ID: ${sessionId}`); // Log the action
+    logger.info(`Checking existence of session ID: ${sessionId}`);
     const exists = await sessionDetailsService.checkSessionById(sessionId);
-    res.json(exists); // Return the result of the check (true/false)
+    res.json({ exists });
   } catch (error) {
-    logger.error(`Error checking session with ID: ${sessionId}`, error); // Log error with sessionId
-    res.status(400).send("Error checking session"); // Send bad request response
+    logger.error(`Error checking session ID: ${sessionId}`, error);
+    res.status(400).send("Error checking session");
   }
 };
 
 /**
- * Creates a new session with the details provided in the request body
+ * Create a new session
  */
 export const createSession = async (req: Request, res: Response) => {
-  const sessionDetails = req.body;
-
   try {
-    logger.info("Creating a new session", { sessionDetails }); // Log the session details being created
-    const createdSession = await sessionDetailsService.createSession(sessionDetails);
-    res.status(201).json(createdSession); // Return the created session as JSON response
+    const sessionData = req.body;
+    logger.info("Creating a new session", { sessionData });
+    const createdSession = await sessionDetailsService.createSession(sessionData);
+    res.status(201).json(createdSession);
   } catch (error: any) {
-    logger.error("Error creating session", error); // Log error during session creation
-    res.status(400).send(error.message); // Send error message response
+    logger.error("Error creating session", error);
+    res.status(400).send(error.message || "Error creating session");
   }
 };
 
 /**
- * Creates a payload for an existing session by sessionId
- */
-// export const createPayloadForSession = async (req: Request, res: Response) => {
-//   const payload = req.body;
-
-//   try {
-//     logger.info("Creating payload for session", { payload }); // Log the payload being created
-//     const sessionDetails = await sessionDetailsRepository.findOneByOrFail({
-//       sessionId: payload?.sessionDetails?.sessionId,
-//     });
-
-//     // Add the payload to the session's payload list
-//     const payloadList = sessionDetails.payloads || [];
-//     payloadList.push(payload);    
-//     sessionDetails.payloads = payloadList;
-
-//     // Save the updated session
-//     const updatedSession = await sessionDetailsRepository.save(sessionDetails);
-//     res.json(updatedSession); // Return the updated session as JSON response
-//   } catch (error:any) {
-//     logger.error("Error creating payload for session", error); // Log error with details
-//     res.status(404).send(`${error?.message}`); // Send session not found error
-//   }
-// };
-
-
-export const createPayloadForSession = async (req: Request, res: Response) => {
-  const payloadData = req.body;
-
-  try {
-    logger.info("Creating payload for session", { payloadData });
-
-    // 1. Find the session
-    const sessionDetails = await sessionDetailsRepository.findOneByOrFail({
-      sessionId: payloadData?.sessionDetails?.sessionId,
-    });
-
-    // 2. Create a proper Payload entity instance
-    const newPayload = payloadRepository.create({
-      ...payloadData,
-      sessionDetails, // This links it via the relation
-    });
-
-    // 3. Save the payload directly
-    await payloadRepository.save(newPayload);
-
-    res.json(newPayload); // Return the saved payload
-  } catch (error: any) {
-    logger.error("Error creating payload for session", error);
-    res.status(400).send(error?.message || "Error creating payload");
-  }
-};
-
-/**
- * Fetches payload details for a given sessionId
- */
-export const getPayloadBySessionId = async (req: Request, res: Response) => {
-  const { sessionId } = req.params;
-
-  try {
-    logger.info(`Fetching payload details for session ID: ${sessionId}`); // Log the action
-    const payloadDetails: PayloadDetailsDTO[] =
-      await sessionDetailsService.getPayloadDetails(sessionId);
-    res.json(payloadDetails); // Return the payload details as JSON response
-  } catch (error: any) {
-    logger.error(`Error retrieving payload for session ID: ${sessionId}`, error); // Log error with sessionId
-    res.status(404).send(error.message); // Send error message response
-  }
-};
-
-/**
- * Updates session details by sessionId
+ * Update a session
  */
 export const updateSession = async (req: Request, res: Response) => {
   const { sessionId } = req.params;
-  const updatedDetails = req.body;
-
+  const updatedData = req.body;
   try {
-    logger.info(`Updating session with ID: ${sessionId}`, { updatedDetails }); // Log session update details
-    const updatedSession = await sessionDetailsService.updateSession(sessionId, updatedDetails);
-    res.json(updatedSession); // Return the updated session as JSON response
-  } catch (error) {
-    logger.error(`Error updating session with ID: ${sessionId}`, error); // Log error during session update
-    res.status(404).send("Session not found"); // Send session not found error
+    logger.info(`Updating session with ID: ${sessionId}`, { updatedData });
+    const updatedSession = await sessionDetailsService.updateSession(sessionId, updatedData);
+    res.json(updatedSession);
+  } catch (error: any) {
+    logger.error(`Error updating session ID: ${sessionId}`, error);
+    res.status(404).send(error.message || "Session not found");
   }
 };
 
 /**
- * Deletes a session by sessionId
+ * Delete a session
  */
 export const deleteSession = async (req: Request, res: Response) => {
   const { sessionId } = req.params;
-
   try {
-    logger.info(`Deleting session with ID: ${sessionId}`); // Log session deletion
+    logger.info(`Deleting session with ID: ${sessionId}`);
     await sessionDetailsService.deleteSession(sessionId);
-    res.status(204).send(); // Send no content response on successful deletion
+    res.status(204).send();
   } catch (error) {
-    logger.error(`Error deleting session with ID: ${sessionId}`, error); // Log error during session deletion
-    res.status(404).send("Session not found"); // Send session not found error
+    logger.error(`Error deleting session ID: ${sessionId}`, error);
+    res.status(404).send("Session not found");
+  }
+};
+
+/**
+ * Create a payload for a session
+ */
+export const createPayloadForSession = async (req: Request, res: Response) => {
+  try {
+    const payloadData = req.body;
+    logger.info("Creating payload for session", { payloadData });
+    const newPayload = await payloadRepo.create(payloadData);
+    res.status(201).json(newPayload);
+  } catch (error: any) {
+    logger.error("Error creating payload", error);
+    res.status(400).send(error.message || "Error creating payload");
+  }
+};
+
+/**
+ * Get payloads by sessionId
+ */
+export const getPayloadBySessionId = async (req: Request, res: Response) => {
+  const { sessionId } = req.params;
+  try {
+    logger.info(`Fetching payloads for session ID: ${sessionId}`);
+    const payloadDetails = await sessionDetailsService.getPayloadDetails(sessionId);
+    res.json(payloadDetails);
+  } catch (error: any) {
+    logger.error(`Error fetching payloads for session ID: ${sessionId}`, error);
+    res.status(404).send(error.message || "Error retrieving payloads");
   }
 };
