@@ -144,3 +144,29 @@ export const getPayloadByTransactionId = async (
     res.status(400).send("Error retrieving payload"); // Send bad request response
   }
 };
+
+export const getPayloadsByTransactionId = async (
+  req: Request,
+  res: Response
+) => {
+  const { transactionId } = req.params;
+
+  try {
+    logger.info(`Fetching payload with transactionId: ${transactionId}`); // Log the action with transactionId
+    const payload = await payloadService.getPayloadsByTransactionId(
+      transactionId
+    );
+    if (payload) {
+      res.json(payload); // Return the payload details if found
+    } else {
+      logger.warn(`Payload with transactionId: ${transactionId} not found`); // Log warning if not found
+      res.status(404).send("Payload not found for transactionId"); // Send not found response
+    }
+  } catch (error) {
+    logger.error(
+      `Error retrieving payload with transactionId: ${transactionId}`,
+      error
+    ); // Log error with transactionId
+    res.status(400).send("Error retrieving payload"); // Send bad request response
+  }
+};
