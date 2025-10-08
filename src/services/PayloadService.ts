@@ -89,4 +89,27 @@ export class PayloadService {
       throw new Error("Error deleting payload");
     }
   }
+  async getPayloadsByTransactionId(transactionId: string){
+    try {
+      logger.info(`Fetching all payloads with transactionId: ${transactionId}`);
+
+      const payloads = await this.payloadRepo.findByTransactionId(transactionId);
+
+      if (!payloads || payloads.length === 0) {
+        logger.warn(`No payloads found for transactionId: ${transactionId}`);
+      } else {
+        logger.info(
+          `Found ${payloads.length} payload(s) for transactionId: ${transactionId}`
+        );
+      }
+
+      return payloads;
+    } catch (error) {
+      logger.error(
+        `Error retrieving payloads with transactionId: ${transactionId}`,
+        error
+      );
+      throw new Error("Error retrieving payloads");
+    }
+  }
 }
