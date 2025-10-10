@@ -1,77 +1,27 @@
-import {
-  Entity,
-  PrimaryGeneratedColumn,
-  Column,
-  CreateDateColumn,
-  UpdateDateColumn,
-  ManyToOne,
-  JoinColumn,
-} from "typeorm";
-import { SessionDetails } from "./SessionDetails";
-import { Action } from "./ActionEnums";
+import { Schema, model, Types } from "mongoose";
 
-@Entity({ name: "payload" })
-export class Payload {
-  @PrimaryGeneratedColumn()
-  id!: number; // Use definite assignment assertion
+const PayloadSchema = new Schema(
+  {
+    messageId: { type: String },
+    transactionId: { type: String },
+    flowId: { type: String },
+    payloadId: { type: String, required: true, unique: true },
+    action: { type: String },
+    bppId: { type: String },
+    bapId: { type: String },
+    reqHeader: { type: String },
+    jsonRequest: { type: Object },  // plain JSON object
+    jsonResponse: { type: Object }, // plain JSON object
+    httpStatus: { type: Number },
+    action_id: { type: String },
 
-  @Column({ name: "message_id", nullable: true })
-  messageId?: string; // Optional, can be undefined
+    // Explicit session_id key referencing SessionDetails
+    session_id: { type: Types.ObjectId, ref: "SessionDetails", required: true },
+  },
+  { timestamps: true }
+);
 
-  @Column({ name: "transaction_id", nullable: true })
-  transactionId?: string; // Optional, can be undefined
+// Index for faster queries by session
+PayloadSchema.index({ session_id: 1 });
 
-  @Column({ name: "flow_id", nullable: true })
-  flowId?: string; // Optional, can be undefined
-
-  @Column({ name: "payload_id", nullable: false, unique:true })
-  payloadId!: string; //mandatory
-
-  @Column({
-    name: "action",
-    nullable: true,
-  })
-  action?: string; // Optional, can be undefined
-
-  @Column({ name: "bpp_id", nullable: true })
-  bppId?: string; // Optional, can be undefined
-
-  @Column({ name: "bap_id", nullable: true })
-  bapId?: string; // Optional, can be undefined
-
-  @Column({ name: "request_header", nullable: true })
-  reqHeader?: string; // Optional, can be undefined
-
-  @Column("simple-json", { name: "json_request", nullable: true })
-  jsonRequest?: Record<string, unknown>; // Optional, can be undefined
-
-  @Column("simple-json", { name: "json_response", nullable: true })
-  jsonResponse?: Record<string, unknown>; // Optional, can be undefined
-
-  @Column({ name: "http_status", nullable: true })
-  httpStatus?: number; // Optional, can be undefined
-
-
-  @CreateDateColumn({ name: "created_at" })
-  createdAt!: Date; // Use definite assignment assertion
-
-  @UpdateDateColumn({ name: "updated_at" })
-  updatedAt!: Date; // Use definite assignment assertion
-
-  @Column({ name: "session_id", nullable: true })
-  sessionId?: string;
-
-  @Column({ nullable: true })
-  action_id?: string;
-
-  @ManyToOne(
-    () => SessionDetails,
-    (sessionDetails) => sessionDetails.payloads,
-    {
-      eager: false,
-      nullable: true,
-    }
-  )
-  @JoinColumn({ name: "session_id", referencedColumnName: "sessionId" })
-  sessionDetails?: SessionDetails; // Optional, can be undefined
-}
+export const Payload = model("Payload", PayloadSchema);

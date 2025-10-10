@@ -1,219 +1,116 @@
-import { DataSource } from "typeorm";
+import { SessionDetailsRepository } from "../repositories/SessionDetailsRepository";
+import { PayloadRepository } from "../repositories/PayloadRepository";
 import { SessionDetails } from "../entity/SessionDetails";
-import { PayloadDetailsDTO } from "../entity/PayloadDetailsDTO";
 import { Payload } from "../entity/Payload";
-import logger from '../utils/logger'; // Importing logger utility
+import { PayloadDetailsDTO } from "../entity/PayloadDetailsDTO";
+import logger from "../utils/logger";
+
+// Define a type for session + populated payloads
+type SessionWithPayloads = InstanceType<typeof SessionDetails> & {
+  payloads: InstanceType<typeof Payload>[];
+};
 
 export class SessionDetailsService {
-  private dataSource: DataSource;
+  private sessionRepo: SessionDetailsRepository;
+  private payloadRepo: PayloadRepository;
 
-  constructor(dataSource: DataSource) {
-    this.dataSource = dataSource;
+  constructor(sessionRepo: SessionDetailsRepository, payloadRepo: PayloadRepository) {
+    this.sessionRepo = sessionRepo;
+    this.payloadRepo = payloadRepo;
   }
 
-  /**
-   * Retrieves all session details from the database.
-   * @returns List of session details.
-   */
-  async getAllSessions(): Promise<SessionDetails[]> {
+  async getAllSessions(): Promise<InstanceType<typeof SessionDetails>[]> {
     try {
-      logger.info("Fetching all session details from database"); // Log the action
-      const sessionDetailsRepository = this.dataSource.getRepository(SessionDetails);
-      const sessions = await sessionDetailsRepository.find();
-      logger.info(`Found ${sessions.length} session(s)`); // Log how many sessions were found
-      return sessions;
+      logger.info("Fetching all session details from MongoDB");
+      return this.sessionRepo.findAll();
     } catch (error) {
-      logger.error("Error retrieving all session details", error); // Log any error
+      logger.error("Error retrieving all session details", error);
       throw new Error("Error retrieving all session details");
     }
   }
 
-  /**
-   * Retrieves a specific session by its ID.
-   * @param sessionId The ID of the session.
-   * @returns SessionDetails object or undefined if not found.
-   */
-  async getSessionById(sessionId: string): Promise<SessionDetails | undefined> {
+  async getSessionById(sessionId: string): Promise<InstanceType<typeof SessionDetails> | null> {
     try {
-      logger.info(`Fetching session with ID: ${sessionId}`); // Log the action with ID
-      const sessionDetailsRepository = this.dataSource.getRepository(SessionDetails);
-      const sessionDetails = await sessionDetailsRepository.findOne({
-        where: { sessionId },
-        relations: ["payloads"],
-      });
-      if (!sessionDetails) {
-        logger.warn(`Session with ID: ${sessionId} not found`); // Log warning if not found
-      } else {
-        logger.info(`Session with ID: ${sessionId} found`); // Log if found
-      }
-      return sessionDetails || undefined; // Return undefined if null
+      logger.info(`Fetching session with ID: ${sessionId}`);
+      return this.sessionRepo.findBySessionId(sessionId);
     } catch (error) {
-      logger.error(`Error retrieving session with ID: ${sessionId}`, error); // Log error with ID
+      logger.error(`Error retrieving session with ID: ${sessionId}`, error);
       throw new Error("Error retrieving session");
     }
   }
 
-  /**
-   * Checks if a session exists by its ID.
-   * @param sessionId The ID of the session.
-   * @returns True if the session exists, otherwise false.
-   */
   async checkSessionById(sessionId: string): Promise<boolean> {
     try {
-      logger.info(`Checking existence of session with ID: ${sessionId}`); // Log the check action
-      const sessionDetailsRepository = this.dataSource.getRepository(SessionDetails);
-      const sessionDetails = await sessionDetailsRepository.findOne({
-        where: { sessionId },
-      });
-      const exists = sessionDetails !== null; // True if session exists
-      if (exists) {
-        logger.info(`Session with ID: ${sessionId} exists`); // Log if session exists
-      } else {
-        logger.warn(`Session with ID: ${sessionId} does not exist`); // Log warning if not found
-      }
-      return exists;
+      logger.info(`Checking existence of session with ID: ${sessionId}`);
+      return this.sessionRepo.checkSessionById(sessionId);
     } catch (error) {
-      logger.error(`Error checking session existence with ID: ${sessionId}`, error); // Log error with ID
+      logger.error(`Error checking session existence with ID: ${sessionId}`, error);
       throw new Error("Error checking session existence");
     }
   }
 
-  /**
-   * Creates a new session in the database.
-   * @param sessionDetails The session data to be created.
-   * @returns The created session details.
-   */
-  async createSession(sessionDetails: SessionDetails): Promise<SessionDetails> {
+  async getPayloadDetails(sessionId: string): Promise<PayloadDetailsDTO[]> {
+    if (!sessionId) throw new Error("Session ID cannot be undefined");
+
     try {
-      logger.info("Creating new session", { sessionDetails }); // Log session creation
-      const sessionDetailsRepository = this.dataSource.getRepository(SessionDetails);
-      const savedSession = await sessionDetailsRepository.save(sessionDetails);
-      logger.info(`Session created successfully with ID: ${savedSession.sessionId}`); // Log successful creation
-      return savedSession;
+      logger.info(`Fetching payload details for session ID: ${sessionId}`);
+      
+      const session = (await this.sessionRepo.findWithPayloadsBySessionId(sessionId)) as SessionWithPayloads;
+
+      if (!session) {
+        logger.warn(`SessionDetails not found for sessionId: ${sessionId}`);
+        throw new Error(`SessionDetails not found for sessionId: ${sessionId}`);
+      }
+
+      const domain = session.domain ?? "defaultDomain";
+
+      return session.payloads.map(
+        (payload: InstanceType<typeof Payload>) => new PayloadDetailsDTO(session.session_type, domain, payload)
+      );
     } catch (error) {
-      logger.error("Error creating new session", error); // Log error during session creation
-      throw new Error("Error creating new session");
+      logger.error(`Error retrieving payload details for sessionId: ${sessionId}`, error);
+      throw new Error("Error retrieving payload details");
     }
   }
 
-  /**
-   * Updates an existing session by its ID.
-   * @param sessionId The ID of the session to update.
-   * @param updatedDetails The updated session details.
-   * @returns The updated session details.
-   */
-  async updateSession(
-    sessionId: string,
-    updatedDetails: SessionDetails
-  ): Promise<SessionDetails> {
-    try {
-      logger.info(`Updating session with ID: ${sessionId}`, { updatedDetails }); // Log the update action
-      const sessionDetailsRepository = this.dataSource.getRepository(SessionDetails);
-      const existingSession = await sessionDetailsRepository.findOne({
-        where: { sessionId },
-      });
+  // -------------------- New Methods --------------------
 
-      if (!existingSession) {
-        logger.warn(`Session with ID: ${sessionId} not found for update`); // Log if session doesn't exist
+  async createSession(sessionData: Partial<InstanceType<typeof SessionDetails>>): Promise<InstanceType<typeof SessionDetails>> {
+    try {
+      logger.info("Creating new session", { sessionData });
+      const created = await this.sessionRepo.create(sessionData);
+      logger.info(`Session created successfully with ID: ${created.session_id}`);
+      return created;
+    } catch (error) {
+      logger.error("Error creating session", error);
+      throw new Error("Error creating session");
+    }
+  }
+
+  async updateSession(sessionId: string, updatedData: Partial<InstanceType<typeof SessionDetails>>): Promise<InstanceType<typeof SessionDetails> | null> {
+    try {
+      logger.info(`Updating session with ID: ${sessionId}`, { updatedData });
+      const updated = await this.sessionRepo.update(sessionId, updatedData);
+      if (!updated) {
+        logger.warn(`Session with ID: ${sessionId} not found for update`);
         throw new Error(`Session not found with ID: ${sessionId}`);
       }
-
-      // Update existing session fields with the new data
-      existingSession.npType = updatedDetails.npType;
-      existingSession.npId = updatedDetails.npId;
-      existingSession.domain = updatedDetails.domain;
-
-      const updatedSession = await sessionDetailsRepository.save(existingSession);
-      logger.info(`Session with ID: ${sessionId} updated successfully`); // Log successful update
-      return updatedSession;
+      logger.info(`Session with ID: ${sessionId} updated successfully`);
+      return updated;
     } catch (error) {
-      logger.error(`Error updating session with ID: ${sessionId}`, error); // Log error during update
+      logger.error(`Error updating session with ID: ${sessionId}`, error);
       throw new Error("Error updating session");
     }
   }
 
-  /**
-   * Deletes a session by its ID.
-   * @param sessionId The ID of the session to delete.
-   */
   async deleteSession(sessionId: string): Promise<void> {
     try {
-      logger.info(`Deleting session with ID: ${sessionId}`); // Log the deletion action
-      const sessionDetailsRepository = this.dataSource.getRepository(SessionDetails);
-      await sessionDetailsRepository.delete({ sessionId });
-      logger.info(`Session with ID: ${sessionId} deleted successfully`); // Log successful deletion
+      logger.info(`Deleting session with ID: ${sessionId}`);
+      await this.sessionRepo.delete(sessionId);
+      logger.info(`Session with ID: ${sessionId} deleted successfully`);
     } catch (error) {
-      logger.error(`Error deleting session with ID: ${sessionId}`, error); // Log error during deletion
+      logger.error(`Error deleting session with ID: ${sessionId}`, error);
       throw new Error("Error deleting session");
-    }
-  }
-
-  /**
-   * Retrieves session details along with associated payloads.
-   * @param sessionId The ID of the session.
-   * @returns SessionDetails with associated payloads or undefined if not found.
-   */
-  async getSessionWithPayloads(
-    sessionId: string
-  ): Promise<SessionDetails | undefined> {
-    try {
-      logger.info(`Fetching session with ID: ${sessionId} and its payloads`); // Log the action
-      const sessionDetailsRepository = this.dataSource.getRepository(SessionDetails);
-      const sessionDetails = await sessionDetailsRepository.findOne({
-        where: { sessionId },
-        relations: ["payloads"], // Ensure payloads are included
-      });
-
-      if (!sessionDetails) {
-        logger.warn(`Session with ID: ${sessionId} not found with payloads`); // Log warning if not found
-      }
-
-      return sessionDetails || undefined; // Return undefined if null
-    } catch (error) {
-      logger.error(`Error retrieving session with payloads for sessionId: ${sessionId}`, error); // Log error with sessionId
-      throw new Error("Error retrieving session with payloads");
-    }
-  }
-
-  /**
-   * Retrieves payload details associated with a session.
-   * @param sessionId The ID of the session.
-   * @returns List of PayloadDetailsDTO objects.
-   */
-  async getPayloadDetails(
-    sessionId: string | undefined
-  ): Promise<PayloadDetailsDTO[]> {
-    // Ensure sessionId is valid
-    if (!sessionId) {
-      logger.error("Session ID cannot be undefined"); // Log error for invalid session ID
-      throw new Error("Session ID cannot be undefined");
-    }
-
-    try {
-      logger.info(`Fetching payload details for session ID: ${sessionId}`); // Log the action
-      const sessionDetailsRepository = this.dataSource.getRepository(SessionDetails);
-      const sessionDetails = await sessionDetailsRepository.findOne({
-        where: { sessionId },
-        relations: ["payloads"],
-      });
-
-      if (!sessionDetails) {
-        logger.warn(`SessionDetails not found for sessionId: ${sessionId}`); // Log warning if not found
-        throw new Error(`SessionDetails not found for sessionId: ${sessionId}`);
-      }
-
-      const domain = sessionDetails.domain ?? "defaultDomain"; // Provide a default value for domain
-
-      // Map payloads to PayloadDetailsDTO objects
-      const payloadDetails = sessionDetails.payloads.map((payload) => {
-        return new PayloadDetailsDTO(sessionDetails.npType, domain, payload);
-      });
-
-      logger.info(`Fetched ${payloadDetails.length} payload details for session ID: ${sessionId}`); // Log how many payloads were fetched
-      return payloadDetails;
-    } catch (error) {
-      logger.error(`Error retrieving payload details for sessionId: ${sessionId}`, error); // Log error with sessionId
-      throw new Error("Error retrieving payload details");
     }
   }
 }

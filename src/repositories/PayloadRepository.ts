@@ -1,24 +1,37 @@
-import { DataSource, Repository } from "typeorm";
 import { Payload } from "../entity/Payload";
 
 export class PayloadRepository {
-  private repository: Repository<Payload>;
-
-  constructor(dataSource: DataSource) {
-    this.repository = dataSource.getRepository(Payload);
+   async findByTransactionId(transactionId: string) {
+    // returns all payloads for the given transactionId
+    return Payload.find({ transactionId }).populate("session_id");
   }
 
-  // Find Payload by transactionId
-  async findByTransactionId(transactionId: string): Promise<Payload | null> {
-    return this.repository.findOne({ where: { transactionId } });
+  async findOneByTransactionId(transactionId: string) {
+    // returns just one payload for the given transactionId
+    return Payload.findOne({ transactionId }).populate("session_id");
   }
 
-  // Find Payload by transactionId
-  async findByPayloadId(payloadId: string): Promise<Payload | null> {
-    return this.repository.findOne({ where: { payloadId } });
+  async findByPayloadId(payloadId: string) {
+    return Payload.findOne({ payloadId }).populate("session_id");
   }
-  // Find Payload by sessionId
-  async findBySessionDetailsSessionId(sessionId: string): Promise<Payload[]> {
-    return this.repository.find({ where: { sessionDetails: { sessionId } } });
+  
+  async findBySessionDetailsSessionId(sessionId: string) {
+    return Payload.find({ sessionDetails: sessionId }).populate("session_id");
+  }
+
+  async findAll() {
+    return Payload.find().populate("session_id");
+  }
+
+  async create(payloadData: any) {
+    return Payload.create(payloadData);
+  }
+
+  async update(id: string, updatedData: any) {
+    return Payload.findByIdAndUpdate(id, updatedData, { new: true }).populate("sessionDetails");
+  }
+
+  async delete(id: string) {
+    return Payload.findByIdAndDelete(id);
   }
 }
