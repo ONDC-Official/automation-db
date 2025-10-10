@@ -156,7 +156,7 @@ jobs:
           echo "SERVICE_NAME=${{ vars.SERVICE_NAME }}" >> \$REPO_DIR/.env
           echo "TRACE_URL=${{ vars.TRACE_URL }}" >> \$REPO_DIR/.env
           echo "API_SERVICE_KEY=${{ secrets.API_SERVICE_KEY }}" >> \$REPO_DIR/.env
-
+          echo "MONGO_URI=${{ vars.MONGO_URI }}" >> \$REPO_DIR/.env
           EOF
 
       - name: Verify .env and docker-compose.yml files
