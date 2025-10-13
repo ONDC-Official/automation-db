@@ -15,8 +15,8 @@ export class PayloadRepository {
     return Payload.findOne({ payloadId });
   }
   
-  async findBySessionDetailsSessionId(sessionId: string) {
-    return Payload.find({ sessionDetails: sessionId });
+  async findBySessionId(sessionId: string) {
+    return Payload.find({ sessionId: sessionId });
   }
 
   async findAll() {

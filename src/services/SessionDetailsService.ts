@@ -50,28 +50,43 @@ export class SessionDetailsService {
   }
 
   async getPayloadDetails(sessionId: string): Promise<PayloadDetailsDTO[]> {
-    if (!sessionId) throw new Error("Session ID cannot be undefined");
+  if (!sessionId) throw new Error("Session ID cannot be undefined");
 
-    try {
-      logger.info(`Fetching payload details for session ID: ${sessionId}`);
-      
-      const session = (await this.sessionRepo.findWithPayloadsBySessionId(sessionId)) as SessionWithPayloads;
-                   
-      if (!session) {
-        logger.warn(`SessionDetails not found for sessionId: ${sessionId}`);
-        throw new Error(`SessionDetails not found for sessionId: ${sessionId}`);
-      }
+  try {
+    logger.info(`Fetching payload details for session ID: ${sessionId}`);
 
-      const domain = session.domain ?? "defaultDomain";
-
-      return session.payloads.map(
-        (payload: InstanceType<typeof Payload>) => new PayloadDetailsDTO(session.sessionType, domain, payload)
-      );
-    } catch (error) {
-      logger.error(`Error retrieving payload details for sessionId: ${sessionId}`, error);
-      throw new Error("Error retrieving payload details");
+    // 1️⃣ Fetch session details
+    const session = await this.sessionRepo.findBySessionId(sessionId);
+    if (!session) {
+      logger.warn(`SessionDetails not found for sessionId: ${sessionId}`);
+      throw new Error(`SessionDetails not found for sessionId: ${sessionId}`);
     }
+
+    // 2️⃣ Fetch payloads linked to this session ID
+    const payloads = await this.payloadRepo.findBySessionId(sessionId);
+    if (!payloads || payloads.length === 0) {
+      logger.warn(`No payloads found for sessionId: ${sessionId}`);
+      return [];
+    }
+
+    // 3️⃣ Map payloads into DTOs
+    const domain = session.domain ?? "defaultDomain";
+
+    const payloadDetails = payloads.map(
+      (payload: InstanceType<typeof Payload>) =>
+        new PayloadDetailsDTO(session.sessionType, domain, payload)
+    );
+
+    logger.info(
+      `Fetched ${payloadDetails.length} payload(s) for sessionId: ${sessionId}`
+    );
+
+    return payloadDetails;
+  } catch (error) {
+    logger.error(`Error retrieving payload details for sessionId: ${sessionId}`, error);
+    throw new Error("Error retrieving payload details");
   }
+}
 
   // -------------------- New Methods --------------------
 
