@@ -15,13 +15,12 @@ const PayloadSchema = new Schema(
     httpStatus: { type: Number },
     action_id: { type: String },
 
-    // Explicit session_id key referencing SessionDetails
-    session_id: { type: String, required: true },
+    sessionId: { type: String, required: true },
   },
   { timestamps: true }
 );
 
 // Index for faster queries by session
-PayloadSchema.index({ session_id: 1 });
+PayloadSchema.index({ sessionId: 1 });
 
 export const Payload = model("Payload", PayloadSchema);

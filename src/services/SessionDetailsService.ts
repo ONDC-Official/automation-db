@@ -56,7 +56,7 @@ export class SessionDetailsService {
       logger.info(`Fetching payload details for session ID: ${sessionId}`);
       
       const session = (await this.sessionRepo.findWithPayloadsBySessionId(sessionId)) as SessionWithPayloads;
-
+                   
       if (!session) {
         logger.warn(`SessionDetails not found for sessionId: ${sessionId}`);
         throw new Error(`SessionDetails not found for sessionId: ${sessionId}`);
@@ -65,7 +65,7 @@ export class SessionDetailsService {
       const domain = session.domain ?? "defaultDomain";
 
       return session.payloads.map(
-        (payload: InstanceType<typeof Payload>) => new PayloadDetailsDTO(session.session_type, domain, payload)
+        (payload: InstanceType<typeof Payload>) => new PayloadDetailsDTO(session.sessionType, domain, payload)
       );
     } catch (error) {
       logger.error(`Error retrieving payload details for sessionId: ${sessionId}`, error);
@@ -79,7 +79,7 @@ export class SessionDetailsService {
     try {
       logger.info("Creating new session", { sessionData });
       const created = await this.sessionRepo.create(sessionData);
-      logger.info(`Session created successfully with ID: ${created.session_id}`);
+      logger.info(`Session created successfully with ID: ${created.sessionId}`);
       return created;
     } catch (error) {
       logger.error("Error creating session", error);

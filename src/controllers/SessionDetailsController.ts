@@ -120,7 +120,7 @@ export const createPayloadForSession = async (req: Request, res: Response) => {
     const { sessionDetails, ...rest } = req.body;
     const payloadData = {
       ...rest,
-      session_id: sessionDetails?.sessionId || null, // safely extract sessionId
+      sessionId: sessionDetails?.sessionId || null, // safely extract sessionId
     };
     logger.info("Creating payload for session", { payloadData });
     const newPayload = await payloadRepo.create(payloadData);
