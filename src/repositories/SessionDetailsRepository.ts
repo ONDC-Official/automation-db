@@ -8,7 +8,7 @@ export class SessionDetailsRepository {
 
   // Find SessionDetails by sessionId and populate related payloads
   async findWithPayloadsBySessionId(sessionId: string) {
-    return SessionDetails.findOne({ sessionId: sessionId }).populate("payloads").exec();
+    return SessionDetails.findOne({ sessionId: sessionId }).exec();
   }
 
   // Fetch all sessions
