@@ -7,7 +7,10 @@ import { SessionDetailsService } from "../services/SessionDetailsService";
 // Instantiate repositories and service
 const sessionRepo = new SessionDetailsRepository();
 const payloadRepo = new PayloadRepository();
-const sessionDetailsService = new SessionDetailsService(sessionRepo, payloadRepo);
+const sessionDetailsService = new SessionDetailsService(
+  sessionRepo,
+  payloadRepo
+);
 
 /**
  * Fetch all sessions
@@ -65,7 +68,9 @@ export const createSession = async (req: Request, res: Response) => {
   try {
     const sessionData = req.body;
     logger.info("Creating a new session", { sessionData });
-    const createdSession = await sessionDetailsService.createSession(sessionData);
+    const createdSession = await sessionDetailsService.createSession(
+      sessionData
+    );
     res.status(201).json(createdSession);
   } catch (error: any) {
     logger.error("Error creating session", error);
@@ -81,7 +86,10 @@ export const updateSession = async (req: Request, res: Response) => {
   const updatedData = req.body;
   try {
     logger.info(`Updating session with ID: ${sessionId}`, { updatedData });
-    const updatedSession = await sessionDetailsService.updateSession(sessionId, updatedData);
+    const updatedSession = await sessionDetailsService.updateSession(
+      sessionId,
+      updatedData
+    );
     res.json(updatedSession);
   } catch (error: any) {
     logger.error(`Error updating session ID: ${sessionId}`, error);
@@ -109,7 +117,11 @@ export const deleteSession = async (req: Request, res: Response) => {
  */
 export const createPayloadForSession = async (req: Request, res: Response) => {
   try {
-    const payloadData = req.body;
+    const { sessionDetails, ...rest } = req.body;
+    const payloadData = {
+      ...rest,
+      session_id: sessionDetails?.sessionId || null, // safely extract sessionId
+    };
     logger.info("Creating payload for session", { payloadData });
     const newPayload = await payloadRepo.create(payloadData);
     res.status(201).json(newPayload);
@@ -126,7 +138,9 @@ export const getPayloadBySessionId = async (req: Request, res: Response) => {
   const { sessionId } = req.params;
   try {
     logger.info(`Fetching payloads for session ID: ${sessionId}`);
-    const payloadDetails = await sessionDetailsService.getPayloadDetails(sessionId);
+    const payloadDetails = await sessionDetailsService.getPayloadDetails(
+      sessionId
+    );
     res.json(payloadDetails);
   } catch (error: any) {
     logger.error(`Error fetching payloads for session ID: ${sessionId}`, error);
