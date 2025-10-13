@@ -3,8 +3,8 @@ import { SessionType } from "./ActionEnums";
 
 export interface ISessionDetails {
   sessionId: string;
-  npType: string;        // or enum
-  sessionType: SessionType;   // or enum
+  npType: string;        
+  sessionType: SessionType;
   version?: string | null;
   npId?: string | null;
   domain?: string | null;

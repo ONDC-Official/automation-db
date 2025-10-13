@@ -31,7 +31,7 @@ export class SessionDetailsRepository {
   }
 
   async delete(sessionId: string) {
-    return SessionDetails.findOneAndDelete({ session_id: sessionId }).exec();
+    return SessionDetails.findOneAndDelete({ sessionId: sessionId }).exec();
   }
 
   // Check if a session exists

@@ -54,7 +54,7 @@ export const checkSessionById = async (req: Request, res: Response) => {
   try {
     logger.info(`Checking existence of session ID: ${sessionId}`);
     const exists = await sessionDetailsService.checkSessionById(sessionId);
-    res.json({ exists });
+    res.json(exists);
   } catch (error) {
     logger.error(`Error checking session ID: ${sessionId}`, error);
     res.status(400).send("Error checking session");
