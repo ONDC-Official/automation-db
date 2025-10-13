@@ -16,7 +16,7 @@ const PayloadSchema = new Schema(
     action_id: { type: String },
 
     // Explicit session_id key referencing SessionDetails
-    session_id: { type: Types.ObjectId, ref: "SessionDetails", required: true },
+    session_id: { type: String, required: true },
   },
   { timestamps: true }
 );
