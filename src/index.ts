@@ -9,7 +9,7 @@ import { connectMongoDB } from "./mongoConfig";
 dotenv.config();
 
 const app = express();
-const port = process.env.DB_PORT || 5001;
+const port = process.env.PORT || 5001;
 
 app.use(express.json());
 
