@@ -74,7 +74,7 @@ export class SessionDetailsService {
 
     const payloadDetails = payloads.map(
       (payload: InstanceType<typeof Payload>) =>
-        new PayloadDetailsDTO(session.sessionType, domain, payload)
+        new PayloadDetailsDTO(session.npType, domain, payload)
     );
 
     logger.info(
