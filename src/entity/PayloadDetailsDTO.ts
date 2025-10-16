@@ -1,22 +1,22 @@
-import { SessionType } from "./ActionEnums";
+import { SessionType, Type } from "./ActionEnums";
 import { Payload } from "./Payload";
 
 export class PayloadDetailsDTO {
-  npType: SessionType;
+  npType: string;
   domain: string;
   payload: InstanceType<typeof Payload>; // Keep Payload as type
 
-  constructor(npType: SessionType, domain: string, payload: InstanceType<typeof Payload> | any) {
+  constructor(npType: string, domain: string, payload: InstanceType<typeof Payload> | any) {
     this.npType = npType;
     this.domain = domain;
     this.payload = payload;
   }
 
-  getNpType(): SessionType {
+  getNpType(): string {
     return this.npType;
   }
 
-  setNpType(npType: SessionType): void {
+  setNpType(npType: Type): void {
     this.npType = npType;
   }
 

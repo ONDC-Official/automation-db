@@ -3,12 +3,12 @@ import { SessionDetails, ISessionDetails } from "../entity/SessionDetails";
 export class SessionDetailsRepository {
   // Find SessionDetails by sessionId
   async findBySessionId(sessionId: string) {
-    return SessionDetails.findOne({ session_id: sessionId }).exec();
+    return SessionDetails.findOne({ sessionId: sessionId }).exec();
   }
 
   // Find SessionDetails by sessionId and populate related payloads
   async findWithPayloadsBySessionId(sessionId: string) {
-    return SessionDetails.findOne({ session_id: sessionId }).populate("payloads").exec();
+    return SessionDetails.findOne({ sessionId: sessionId }).exec();
   }
 
   // Fetch all sessions
@@ -22,23 +22,21 @@ export class SessionDetailsRepository {
     return session.save();
   }
 
-  // Update a session by session_id
   async update(sessionId: string, updateData: Partial<ISessionDetails>) {
     return SessionDetails.findOneAndUpdate(
-      { session_id: sessionId },
+      { sessionId: sessionId },
       updateData,
       { new: true }
     ).exec();
   }
 
-  // Delete a session by session_id
   async delete(sessionId: string) {
-    return SessionDetails.findOneAndDelete({ session_id: sessionId }).exec();
+    return SessionDetails.findOneAndDelete({ sessionId: sessionId }).exec();
   }
 
   // Check if a session exists
   async checkSessionById(sessionId: string): Promise<boolean> {
-    const session = await SessionDetails.exists({ session_id: sessionId });
+    const session = await SessionDetails.exists({ sessionId: sessionId });
     return !!session;
   }
 

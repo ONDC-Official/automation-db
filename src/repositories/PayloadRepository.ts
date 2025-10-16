@@ -3,24 +3,24 @@ import { Payload } from "../entity/Payload";
 export class PayloadRepository {
    async findByTransactionId(transactionId: string) {
     // returns all payloads for the given transactionId
-    return Payload.find({ transactionId }).populate("session_id");
+    return Payload.find({ transactionId });
   }
 
   async findOneByTransactionId(transactionId: string) {
     // returns just one payload for the given transactionId
-    return Payload.findOne({ transactionId }).populate("session_id");
+    return Payload.findOne({ transactionId });
   }
 
   async findByPayloadId(payloadId: string) {
-    return Payload.findOne({ payloadId }).populate("session_id");
+    return Payload.findOne({ payloadId });
   }
   
-  async findBySessionDetailsSessionId(sessionId: string) {
-    return Payload.find({ sessionDetails: sessionId }).populate("session_id");
+  async findBySessionId(sessionId: string) {
+    return Payload.find({ sessionId: sessionId });
   }
 
   async findAll() {
-    return Payload.find().populate("session_id");
+    return Payload.find();
   }
 
   async create(payloadData: any) {

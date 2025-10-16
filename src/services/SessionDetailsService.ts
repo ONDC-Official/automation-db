@@ -50,28 +50,43 @@ export class SessionDetailsService {
   }
 
   async getPayloadDetails(sessionId: string): Promise<PayloadDetailsDTO[]> {
-    if (!sessionId) throw new Error("Session ID cannot be undefined");
+  if (!sessionId) throw new Error("Session ID cannot be undefined");
 
-    try {
-      logger.info(`Fetching payload details for session ID: ${sessionId}`);
-      
-      const session = (await this.sessionRepo.findWithPayloadsBySessionId(sessionId)) as SessionWithPayloads;
+  try {
+    logger.info(`Fetching payload details for session ID: ${sessionId}`);
 
-      if (!session) {
-        logger.warn(`SessionDetails not found for sessionId: ${sessionId}`);
-        throw new Error(`SessionDetails not found for sessionId: ${sessionId}`);
-      }
-
-      const domain = session.domain ?? "defaultDomain";
-
-      return session.payloads.map(
-        (payload: InstanceType<typeof Payload>) => new PayloadDetailsDTO(session.session_type, domain, payload)
-      );
-    } catch (error) {
-      logger.error(`Error retrieving payload details for sessionId: ${sessionId}`, error);
-      throw new Error("Error retrieving payload details");
+    // 1️⃣ Fetch session details
+    const session = await this.sessionRepo.findBySessionId(sessionId);
+    if (!session) {
+      logger.warn(`SessionDetails not found for sessionId: ${sessionId}`);
+      throw new Error(`SessionDetails not found for sessionId: ${sessionId}`);
     }
+
+    // 2️⃣ Fetch payloads linked to this session ID
+    const payloads = await this.payloadRepo.findBySessionId(sessionId);
+    if (!payloads || payloads.length === 0) {
+      logger.warn(`No payloads found for sessionId: ${sessionId}`);
+      return [];
+    }
+
+    // 3️⃣ Map payloads into DTOs
+    const domain = session.domain ?? "defaultDomain";
+
+    const payloadDetails = payloads.map(
+      (payload: InstanceType<typeof Payload>) =>
+        new PayloadDetailsDTO(session.npType, domain, payload)
+    );
+
+    logger.info(
+      `Fetched ${payloadDetails.length} payload(s) for sessionId: ${sessionId}`
+    );
+
+    return payloadDetails;
+  } catch (error) {
+    logger.error(`Error retrieving payload details for sessionId: ${sessionId}`, error);
+    throw new Error("Error retrieving payload details");
   }
+}
 
   // -------------------- New Methods --------------------
 
@@ -79,7 +94,7 @@ export class SessionDetailsService {
     try {
       logger.info("Creating new session", { sessionData });
       const created = await this.sessionRepo.create(sessionData);
-      logger.info(`Session created successfully with ID: ${created.session_id}`);
+      logger.info(`Session created successfully with ID: ${created.sessionId}`);
       return created;
     } catch (error) {
       logger.error("Error creating session", error);
