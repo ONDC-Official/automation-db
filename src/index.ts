@@ -11,8 +11,8 @@ dotenv.config();
 const app = express();
 const port = process.env.PORT || 5001;
 
-app.use(express.json());
-
+app.use(express.json({ limit: '20mb' }));
+app.use(express.urlencoded({ limit: '20mb', extended: true }));
 // Initialize MongoDB and server
 async function initializeApp() {
   try {
