@@ -150,8 +150,8 @@ export const getPayloadBySessionId = async (req: Request, res: Response) => {
 
 
 export const getSessionsByNp = async (req: Request, res: Response) => {
-  const np_type = (req.query.npType as string) 
-  const np_id = (req.query.npId as string)
+  const np_type = (req.query.np_type as string) 
+  const np_id = (req.query.np_id as string)
 
   if (!np_type || !np_id) {
     logger.warn("Missing npType or npId in query params");
@@ -164,6 +164,7 @@ export const getSessionsByNp = async (req: Request, res: Response) => {
     const sessions = await sessionDetailsService.getSessionsByNp(np_type, np_id);
 
     // 🔹 Extract only sessionId values
+    console.log("The sessions are",sessions)
     const sessionIds = sessions.map((s: any) => s.sessionId);
     res.json({ sessionIds });
   } catch (error: any) {

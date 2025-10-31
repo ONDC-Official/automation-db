@@ -45,6 +45,6 @@ export class SessionDetailsRepository {
     return SessionDetails.findById(id).exec();
   }
   async findByNpTypeAndNpId(npType: string, npId: string) {
-  return SessionDetails.find({ np_type: npType, np_id: npId }).exec();
+  return SessionDetails.find({ npType: npType, npId: npId }).exec();
 }
 }
