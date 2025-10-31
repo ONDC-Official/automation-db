@@ -94,7 +94,7 @@ export class SessionDetailsService {
     try {
       logger.info("Creating new session", { sessionData });
       const created = await this.sessionRepo.create(sessionData);
-      logger.info(`Session created successfully with ID: ${created.session_id}`);
+      logger.info(`Session created successfully with ID: ${created.sessionId}`);
       return created;
     } catch (error) {
       logger.error("Error creating session", error);
