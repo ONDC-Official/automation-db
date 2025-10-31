@@ -94,7 +94,7 @@ export class SessionDetailsService {
     try {
       logger.info("Creating new session", { sessionData });
       const created = await this.sessionRepo.create(sessionData);
-      logger.info(`Session created successfully with ID: ${created.sessionId}`);
+      logger.info(`Session created successfully with ID: ${created.session_id}`);
       return created;
     } catch (error) {
       logger.error("Error creating session", error);
@@ -126,6 +126,24 @@ export class SessionDetailsService {
     } catch (error) {
       logger.error(`Error deleting session with ID: ${sessionId}`, error);
       throw new Error("Error deleting session");
+    }
+  }
+    async getSessionsByNp(npType: string, npId: string): Promise<InstanceType<typeof SessionDetails>[]> {
+    if (!npType || !npId) {
+      throw new Error("npType and npId must be provided");
+    }
+
+    try {
+      logger.info(`Fetching SessionDetails for npType=${npType}, npId=${npId}`);
+      const sessions = await this.sessionRepo.findByNpTypeAndNpId(npType, npId);
+      if (!sessions || sessions.length === 0) {
+        logger.info(`No sessions found for npType=${npType}, npId=${npId}`);
+        return [];
+      }
+      return sessions;
+    } catch (error) {
+      logger.error(`Error fetching SessionDetails for npType=${npType}, npId=${npId}`, error);
+      throw new Error("Error retrieving sessions by npType and npId");
     }
   }
 }

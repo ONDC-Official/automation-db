@@ -2,7 +2,7 @@ import { Schema, model, Document } from "mongoose";
 import { SessionType } from "./ActionEnums";
 
 export interface ISessionDetails {
-  sessionId: string;
+  session_id: string;
   npType: string;        
   sessionType: SessionType;
   version?: string | null;
@@ -14,7 +14,7 @@ export interface ISessionDetails {
 
 const SessionDetailsSchema = new Schema<ISessionDetails>(
   {
-    sessionId: { type: String, required: true },
+    session_id: { type: String, required: true },
     npType: { type: String, required: true },
     sessionType: { type: String, required: true },
     version: { type: String },

@@ -147,3 +147,28 @@ export const getPayloadBySessionId = async (req: Request, res: Response) => {
     res.status(404).send(error.message || "Error retrieving payloads");
   }
 };
+
+
+export const getSessionsByNp = async (req: Request, res: Response) => {
+  const np_type = (req.query.np_type as string) 
+  const np_id = (req.query.np_id as string)
+
+  if (!np_type || !np_id) {
+    logger.warn("Missing np_type or np_id in query params");
+    res.status(400).send("Missing np_type or np_id query parameters");
+    return
+  }
+
+  try {
+    logger.info(`Fetching sessions for np_type=${np_type}, np_id=${np_id}`);
+    const sessions = await sessionDetailsService.getSessionsByNp(np_type, np_id);
+
+    // 🔹 Extract only sessionId values
+    const sessionIds = sessions.map((s: any) => s.session_id);
+    res.json({ sessionIds });
+  } catch (error: any) {
+    logger.error(`Error fetching sessions for np_type=${np_type}, np_id=${np_id}`, error);
+    res.status(500).send(error.message || "Error retrieving session IDs");
+  }
+};
+
