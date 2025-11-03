@@ -3,10 +3,14 @@ import { SessionDetailsRepository } from "../repositories/SessionDetailsReposito
 import { PayloadRepository } from "../repositories/PayloadRepository";
 import logger from "../utils/logger";
 import { SessionDetailsService } from "../services/SessionDetailsService";
+import { ReportService } from "../services/ReportService";
+import { ReportRepository } from "../repositories/ReportRepository";
 
 // Instantiate repositories and service
 const sessionRepo = new SessionDetailsRepository();
 const payloadRepo = new PayloadRepository();
+const reportRepo = new ReportRepository();
+const reportService = new ReportService(reportRepo); 
 const sessionDetailsService = new SessionDetailsService(
   sessionRepo,
   payloadRepo
@@ -148,28 +152,71 @@ export const getPayloadBySessionId = async (req: Request, res: Response) => {
   }
 };
 
-
 export const getSessionsByNp = async (req: Request, res: Response) => {
-  const np_type = (req.query.np_type as string) 
-  const np_id = (req.query.np_id as string)
+  const np_type = req.query.np_type as string;
+  const np_id = req.query.np_id as string;
 
   if (!np_type || !np_id) {
     logger.warn("Missing npType or npId in query params");
     res.status(400).send("Missing npType or npId query parameters");
-    return
+    return;
   }
 
   try {
     logger.info(`Fetching sessions for np_type=${np_type}, np_id=${np_id}`);
-    const sessions = await sessionDetailsService.getSessionsByNp(np_type, np_id);
+    const sessions = await sessionDetailsService.getSessionsByNp(
+      np_type,
+      np_id
+    );
 
-    // 🔹 Extract only sessionId values
-    console.log("The sessions are",sessions)
-    const sessionIds = sessions.map((s: any) => s.sessionId);
-    res.json({ sessionIds });
+    if (!sessions || sessions.length === 0) {
+      logger.info(`No sessions found for np_type=${np_type}, np_id=${np_id}`);
+      res.json({ sessions: [] });
+      return;
+    }
+
+    // For each session, call reportService.hasReportForTestId individually (prefixed with PW_)
+    const sessionsResponse = await Promise.all(
+      sessions.map(async (s: any) => {
+        const sessionId = s.sessionId ?? s.session_id ?? null;
+
+        const createdAt =
+          s.createdAt instanceof Date
+            ? s.createdAt.toISOString()
+            : typeof s.createdAt === "string"
+            ? new Date(s.createdAt).toISOString()
+            : null;
+
+        const prefixedTestId = `PW_${sessionId}`;
+
+        let reportExists = false;
+        try {
+          // Individual check per session (no bulk)
+          logger.info("Finding report for testId", { testId: prefixedTestId });
+          reportExists = await reportService.hasReportForTestId(prefixedTestId);
+        } catch (err) {
+          // Best-effort: log and default to false so we don't fail entire response
+          logger.error(
+            `Error checking report existence for testId=${prefixedTestId}`,
+            err
+          );
+          reportExists = false;
+        }
+
+        return {
+          sessionId,
+          reportExists,
+          createdAt,
+        };
+      })
+    );
+
+    res.json({ sessions: sessionsResponse });
   } catch (error: any) {
-    logger.error(`Error fetching sessions for np_type=${np_type}, np_id=${np_id}`, error);
+    logger.error(
+      `Error fetching sessions for np_type=${np_type}, np_id=${np_id}`,
+      error
+    );
     res.status(500).send(error.message || "Error retrieving session IDs");
   }
 };
-

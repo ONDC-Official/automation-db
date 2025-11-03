@@ -8,6 +8,7 @@ export interface ISessionDetails {
   version?: string | null;
   npId?: string | null;
   domain?: string | null;
+  reportExists?: boolean;
   createdAt?: Date;
   updatedAt?: Date;
 }
@@ -19,7 +20,8 @@ const SessionDetailsSchema = new Schema<ISessionDetails>(
     sessionType: { type: String, required: true },
     version: { type: String },
     npId: { type: String },
-    domain: { type: String }
+    domain: { type: String },
+    reportExists: { type: Boolean, default: false }
   },
   { timestamps: true }
 );
