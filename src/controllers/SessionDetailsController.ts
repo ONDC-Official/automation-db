@@ -3,18 +3,23 @@ import { SessionDetailsRepository } from "../repositories/SessionDetailsReposito
 import { PayloadRepository } from "../repositories/PayloadRepository";
 import logger from "../utils/logger";
 import { SessionDetailsService } from "../services/SessionDetailsService";
+import { SessionDetails } from "../entity/SessionDetails";
+import { UserService } from "../services/UserService";
+import { UserRepository } from "../repositories/UserRepository";
 import { ReportService } from "../services/ReportService";
 import { ReportRepository } from "../repositories/ReportRepository";
 
 // Instantiate repositories and service
 const sessionRepo = new SessionDetailsRepository();
 const payloadRepo = new PayloadRepository();
+const userRepo = new UserRepository()
 const reportRepo = new ReportRepository();
 const reportService = new ReportService(reportRepo); 
 const sessionDetailsService = new SessionDetailsService(
   sessionRepo,
   payloadRepo
 );
+const userService = new UserService(userRepo)
 
 /**
  * Fetch all sessions
@@ -70,11 +75,16 @@ export const checkSessionById = async (req: Request, res: Response) => {
  */
 export const createSession = async (req: Request, res: Response) => {
   try {
-    const sessionData = req.body;
+    const sessionData: Partial<InstanceType<typeof SessionDetails>> = req.body;
     logger.info("Creating a new session", { sessionData });
     const createdSession = await sessionDetailsService.createSession(
       sessionData
     );
+
+    if(sessionData?.userId && sessionData?.sessionId) {
+      await userService.addSessionToUser(sessionData?.userId, sessionData?.sessionId)
+    }
+
     res.status(201).json(createdSession);
   } catch (error: any) {
     logger.error("Error creating session", error);
@@ -152,6 +162,62 @@ export const getPayloadBySessionId = async (req: Request, res: Response) => {
   }
 };
 
+/**
+ * Update flow status in a session
+ */
+ export const updateFlow = async (req: Request, res: Response): Promise<void> => {
+  const { sessionId } = req.params;
+  const { flow } = req.body;
+
+  if (!flow || !flow?.id) {
+    res.status(400).send("flow is required with id");
+    return; // ✅ ensure it exits cleanly
+  }
+
+  try {
+    logger.info(`Updating flow ${flow.id} status in session ${sessionId}`);
+    const updatedSession = await sessionDetailsService.updateFlowInSession(sessionId, flow.id, flow);
+
+    if (!updatedSession) {
+      res.status(404).send("Flow or session not found");
+      return;
+    }
+
+    res.json(updatedSession);
+  } catch (error: any) {
+    logger.error(`Error updating flow ${flow.id} in session ${sessionId}`, error);
+    res.status(500).send(error.message || "Error updating flow status");
+  }
+};
+
+
+/**
+ * Add a new flow to the session
+ */
+export const addFlowToSession = async (req: Request, res: Response): Promise<void> => {
+  const { sessionId } = req.params;
+  const { id, status, payloads } = req.body;
+
+  if (!id || !status) {
+     res.status(400).send("Flow id and status are required");
+     return
+  }
+
+  try {
+    logger.info(`Adding new flow to session ${sessionId}`);
+    const updatedSession = await sessionDetailsService.addFlowToSession(sessionId, { id, status, payloads });
+
+    if (!updatedSession) {
+       res.status(404).send("Session not found");
+       return
+    }
+
+    res.json(updatedSession);
+  } catch (error: any) {
+    logger.error(`Error adding flow to session ${sessionId}`, error);
+    res.status(500).send(error.message || "Error adding flow to session");
+  }
+}
 export const getSessionsByNp = async (req: Request, res: Response) => {
   const np_type = req.query.np_type as string;
   const np_id = req.query.np_id as string;
