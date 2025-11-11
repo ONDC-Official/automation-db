@@ -16,6 +16,7 @@ export interface ISessionDetails extends Document {
   domain?: string | null;
   userId?: string | null;
   flows?: IFlow[];
+  reportExists?: boolean;
   createdAt?: Date;
   updatedAt?: Date;
 }
@@ -39,6 +40,7 @@ const SessionDetailsSchema = new Schema<ISessionDetails>(
     domain: { type: String },
     userId: { type: String },
     flows: [FlowSchema],
+    reportExists: { type: Boolean, default: false }
   },
   { timestamps: true }
 );

@@ -10,11 +10,13 @@ import {
   updateSession,
   deleteSession,
   updateFlow,
-  addFlowToSession
+  addFlowToSession,
+  getSessionsByNp,
 } from "../controllers/SessionDetailsController";
 
 const router = Router();
 
+router.get("/filter", getSessionsByNp);
 router.get("/", getAllSessions);
 router.get("/:sessionId", getSessionById);
 router.get("/check/:sessionId", checkSessionById);

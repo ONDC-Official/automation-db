@@ -10,6 +10,11 @@ export class ReportRepository {
   async findByTestId(test_id: string) {
     return Report.findOne({ test_id });
   }
+  async existsByTestId(testId: string): Promise<boolean> {
+    if (!testId) return false;
+    const exists = await Report.exists({ test_id: testId });
+    return !!exists; // returns true if a document exists
+  }
 
   // Get all reports
   async findAll() {

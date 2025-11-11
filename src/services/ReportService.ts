@@ -19,7 +19,9 @@ export class ReportService {
       throw new Error("Error retrieving all reports");
     }
   }
-
+  async hasReportForTestId(testId: string): Promise<boolean> {
+    return this.reportRepo.existsByTestId(testId);
+  }
   /**
    * Fetch a report by test_id
    */
