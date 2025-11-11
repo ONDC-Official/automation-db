@@ -1,16 +1,33 @@
 import { Schema, model, Document } from "mongoose";
 import { SessionType } from "./ActionEnums";
 
-export interface ISessionDetails {
+export interface IFlow {
+  id: string;
+  status: "PENDING" | "COMPLETED";
+  payloads?: string[];
+}
+
+export interface ISessionDetails extends Document {
   sessionId: string;
   npType: string;        
   sessionType: SessionType;
   version?: string | null;
   npId?: string | null;
   domain?: string | null;
+  userId?: string | null;
+  flows?: IFlow[];
   createdAt?: Date;
   updatedAt?: Date;
 }
+
+const FlowSchema = new Schema<IFlow>(
+  {
+    id: { type: String, required: true },
+    status: { type: String, enum: ["PENDING", "COMPLETED"], required: true },
+    payloads: [{ type: String }],
+  },
+  { _id: false }
+);
 
 const SessionDetailsSchema = new Schema<ISessionDetails>(
   {
@@ -19,7 +36,9 @@ const SessionDetailsSchema = new Schema<ISessionDetails>(
     sessionType: { type: String, required: true },
     version: { type: String },
     npId: { type: String },
-    domain: { type: String }
+    domain: { type: String },
+    userId: { type: String },
+    flows: [FlowSchema],
   },
   { timestamps: true }
 );

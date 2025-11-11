@@ -6,6 +6,10 @@ export class SessionDetailsRepository {
     return SessionDetails.findOne({ sessionId: sessionId }).exec();
   }
 
+  async findByUserId(userId: string) {
+    return SessionDetails.find({ userId }).exec();
+  }
+
   // Find SessionDetails by sessionId and populate related payloads
   async findWithPayloadsBySessionId(sessionId: string) {
     return SessionDetails.findOne({ sessionId: sessionId }).exec();
@@ -44,4 +48,45 @@ export class SessionDetailsRepository {
   async findSessionById(id: string) {
     return SessionDetails.findById(id).exec();
   }
+
+  // -------------------------
+  // 🧩 Flow Management
+  // -------------------------
+
+  // Add a new flow to a session
+  async addFlowToSession(sessionId: string, flow: { id: string; status: string; payloads?: string[] }) {
+    return SessionDetails.findOneAndUpdate(
+      { sessionId },
+      { $push: { flows: flow } },
+      { new: true }
+    ).exec();
+  }
+
+  // Update a flow’s status or payloads
+  async updateFlowInSession(
+    sessionId: string,
+    flowId: string,
+    updateData: Partial<{ status: string; payloads: string[] }>
+  ) {
+    return SessionDetails.findOneAndUpdate(
+      { sessionId, "flows.id": flowId },
+      {
+        $set: {
+          ...(updateData.status && { "flows.$.status": updateData.status }),
+          ...(updateData.payloads && { "flows.$.payloads": updateData.payloads }),
+        },
+      },
+      { new: true }
+    ).exec();
+  }
+
+  // Remove a flow from session
+  async removeFlowFromSession(sessionId: string, flowId: string) {
+    return SessionDetails.findOneAndUpdate(
+      { sessionId },
+      { $pull: { flows: { id: flowId } } },
+      { new: true }
+    ).exec();
+  }
+
 }

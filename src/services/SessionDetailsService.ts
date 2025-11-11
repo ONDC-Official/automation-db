@@ -39,6 +39,16 @@ export class SessionDetailsService {
     }
   }
 
+  async getSessionsByUserId(userId: string): Promise<InstanceType<typeof SessionDetails>[]> {
+    try {
+      logger.info(`Fetching sessions for userId: ${userId}`);
+      return this.sessionRepo.findByUserId(userId);
+    } catch (error) {
+      logger.error(`Error retrieving sessions for userId: ${userId}`, error);
+      throw new Error("Error retrieving sessions by user");
+    }
+  }
+
   async checkSessionById(sessionId: string): Promise<boolean> {
     try {
       logger.info(`Checking existence of session with ID: ${sessionId}`);
@@ -126,6 +136,47 @@ export class SessionDetailsService {
     } catch (error) {
       logger.error(`Error deleting session with ID: ${sessionId}`, error);
       throw new Error("Error deleting session");
+    }
+  }
+
+ // -------------------- Flow Management --------------------
+
+  async addFlowToSession(sessionId: string, flow: { id: string; status: string; payloads?: string[] }) {
+    try {
+      logger.info(`Adding new flow to session: ${sessionId}`, { flow });
+      const updatedSession = await this.sessionRepo.addFlowToSession(sessionId, flow);
+      if (!updatedSession) throw new Error("Session not found");
+      logger.info(`Flow added successfully to sessionId: ${sessionId}`);
+      return updatedSession;
+    } catch (error) {
+      logger.error(`Error adding flow to session: ${sessionId}`, error);
+      throw new Error("Error adding flow to session");
+    }
+  }
+
+  async updateFlowInSession(sessionId: string, flowId: string, updateData: Partial<{ status: string; payloads: string[] }>) {
+    try {
+      logger.info(`Updating flow ${flowId} in session ${sessionId}`, { updateData });
+      const updatedSession = await this.sessionRepo.updateFlowInSession(sessionId, flowId, updateData);
+      if (!updatedSession) throw new Error("Session or flow not found");
+      logger.info(`Flow ${flowId} updated successfully in session ${sessionId}`);
+      return updatedSession;
+    } catch (error) {
+      logger.error(`Error updating flow ${flowId} in session ${sessionId}`, error);
+      throw new Error("Error updating flow in session");
+    }
+  }
+
+  async removeFlowFromSession(sessionId: string, flowId: string) {
+    try {
+      logger.info(`Removing flow ${flowId} from session ${sessionId}`);
+      const updatedSession = await this.sessionRepo.removeFlowFromSession(sessionId, flowId);
+      if (!updatedSession) throw new Error("Session or flow not found");
+      logger.info(`Flow ${flowId} removed successfully from session ${sessionId}`);
+      return updatedSession;
+    } catch (error) {
+      logger.error(`Error removing flow ${flowId} from session ${sessionId}`, error);
+      throw new Error("Error removing flow from session");
     }
   }
 }
