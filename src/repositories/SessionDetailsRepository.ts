@@ -55,11 +55,31 @@ export class SessionDetailsRepository {
 
   // Add a new flow to a session
   async addFlowToSession(sessionId: string, flow: { id: string; status: string; payloads?: string[] }) {
-    return SessionDetails.findOneAndUpdate(
-      { sessionId },
+    // 1️⃣ Check if session exists
+    const session = await SessionDetails.findOne({ sessionId }).exec();
+    if (!session) {
+      throw new Error(`Session with ID ${sessionId} not found`);
+    }
+  
+    // 2️⃣ Check if flow already exists in that session
+    const existingFlow = session.flows?.find((f: any) => f.id === flow.id);
+    if (existingFlow) {
+      return existingFlow
+    }
+  
+    // 3️⃣ Atomically push flow (avoids race conditions if many writes happen)
+    const updated = await SessionDetails.findOneAndUpdate(
+      { sessionId, "flows.id": { $ne: flow.id } }, // ensure flow.id not present
       { $push: { flows: flow } },
       { new: true }
     ).exec();
+  
+    // 4️⃣ Handle unexpected null (edge race case)
+    if (!updated) {
+      throw new Error(`Failed to add flow — it may have been added concurrently`);
+    }
+  
+    return updated;
   }
 
   // Update a flow’s status or payloads

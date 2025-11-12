@@ -208,7 +208,7 @@ export const addFlowToSession = async (req: Request, res: Response): Promise<voi
     const updatedSession = await sessionDetailsService.addFlowToSession(sessionId, { id, status, payloads });
 
     if (!updatedSession) {
-       res.status(404).send("Session not found");
+       res.status(400).send("Session not found");
        return
     }
 
