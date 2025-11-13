@@ -1,37 +1,64 @@
 import { Payload } from "../entity/Payload";
 
 export class PayloadRepository {
-   async findByTransactionId(transactionId: string) {
-    // returns all payloads for the given transactionId
-    return Payload.find({ transactionId });
-  }
+	async findByTransactionId(transactionId: string) {
+		// returns all payloads for the given transactionId
+		return Payload.find({ transactionId });
+	}
 
-  async findOneByTransactionId(transactionId: string) {
-    // returns just one payload for the given transactionId
-    return Payload.findOne({ transactionId });
-  }
+	async findOneByTransactionId(transactionId: string) {
+		// returns just one payload for the given transactionId
+		return Payload.findOne({ transactionId });
+	}
 
-  async findByPayloadId(payloadId: string) {
-    return Payload.findOne({ payloadId });
-  }
-  
-  async findBySessionId(sessionId: string) {
-    return Payload.find({ sessionId: sessionId });
-  }
+	async findByPayloadId(payloadId: string) {
+		return Payload.findOne({ payloadId });
+	}
 
-  async findAll() {
-    return Payload.find();
-  }
+	async findBySessionId(sessionId: string) {
+		return Payload.find({ sessionId: sessionId });
+	}
 
-  async create(payloadData: any) {
-    return Payload.create(payloadData);
-  }
+	async findAll() {
+		return Payload.find();
+	}
 
-  async update(id: string, updatedData: any) {
-    return Payload.findByIdAndUpdate(id, updatedData, { new: true }).populate("sessionDetails");
-  }
+	async create(payloadData: any) {
+		return Payload.create(payloadData);
+	}
 
-  async delete(id: string) {
-    return Payload.findByIdAndDelete(id);
-  }
+	async update(id: string, updatedData: any) {
+		return Payload.findByIdAndUpdate(id, updatedData, { new: true }).populate(
+			"sessionDetails"
+		);
+	}
+
+	async delete(id: string) {
+		return Payload.findByIdAndDelete(id);
+	}
+
+	async findByDomainAndVersion(
+		domain: string,
+		version: string,
+		skip: number,
+		limit: number
+	) {
+		// jsonRequest.context.domain and jsonRequest.context.version
+		return Payload.find({
+			"jsonRequest.context.domain": domain,
+			"jsonRequest.context.version": version,
+		})
+			.skip(skip)
+			.limit(limit);
+	}
+
+	async findByDomainAndVersionCount(
+		domain: string,
+		version: string
+	): Promise<number> {
+		return Payload.countDocuments({
+			"jsonRequest.context.domain": domain,
+			"jsonRequest.context.version": version,
+		});
+	}
 }
