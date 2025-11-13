@@ -41,12 +41,17 @@ export class PayloadRepository {
 		domain: string,
 		version: string,
 		skip: number,
-		limit: number
+		limit: number,
+		action?: string
 	) {
-		// jsonRequest.context.domain and jsonRequest.context.version
+		// jsonRequest.context.domain and jsonRequest.context.version || jsonRequest.context.core_version
 		return Payload.find({
 			"jsonRequest.context.domain": domain,
-			"jsonRequest.context.version": version,
+			$or: [
+				{ "jsonRequest.context.version": version },
+				{ "jsonRequest.context.core_version": version },
+			],
+			...(action ? { "jsonRequest.context.action": action } : {}),
 		})
 			.skip(skip)
 			.limit(limit);
@@ -54,11 +59,16 @@ export class PayloadRepository {
 
 	async findByDomainAndVersionCount(
 		domain: string,
-		version: string
+		version: string,
+		action?: string
 	): Promise<number> {
 		return Payload.countDocuments({
 			"jsonRequest.context.domain": domain,
-			"jsonRequest.context.version": version,
+			$or: [
+				{ "jsonRequest.context.version": version },
+				{ "jsonRequest.context.core_version": version },
+			],
+			...(action ? { "jsonRequest.context.action": action } : {}),
 		});
 	}
 }

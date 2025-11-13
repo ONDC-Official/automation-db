@@ -188,7 +188,7 @@ export const getPayloadsByDomainAndVersion = async (
 	res: Response
 ) => {
 	try {
-		const { domain, version, page } = req.params;
+		const { domain, version, action, page } = req.params;
 		if (!domain || !version) {
 			logger.error("domain and version are required");
 			res.status(400).send("domain and version are required");
@@ -198,6 +198,7 @@ export const getPayloadsByDomainAndVersion = async (
 		const payloads = await payloadService.getPayloadsByDomainAndVersion(
 			domain,
 			version,
+			action,
 			page ? parseInt(page) : 1
 		);
 		res.json(payloads);

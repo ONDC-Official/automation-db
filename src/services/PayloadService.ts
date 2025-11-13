@@ -128,6 +128,7 @@ export class PayloadService {
 	async getPayloadsByDomainAndVersion(
 		domain: string,
 		version: string,
+		action: string,
 		page: number
 	) {
 		try {
@@ -142,11 +143,13 @@ export class PayloadService {
 				domain,
 				version,
 				skip,
-				pageSize
+				pageSize,
+				action == "any" ? undefined : action
 			);
 			const totalCount = await this.payloadRepo.findByDomainAndVersionCount(
 				domain,
-				version
+				version,
+				action == "any" ? undefined : action
 			);
 			logger.info(
 				`Total payloads for domain: ${domain}, version: ${version} is ${totalCount}`
