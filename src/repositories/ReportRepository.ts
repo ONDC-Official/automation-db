@@ -1,5 +1,5 @@
 import { Report, IReport } from "../entity/Reports";
-
+import { ObjectId } from "mongodb";
 import { Types } from "mongoose";
 import { getGridFsBucket } from "../utils/gridfs";
 
@@ -32,16 +32,23 @@ export class ReportRepository {
   }
 
   /** GRIDFS: Save base64 data into GridFS bucket */
-  async saveToGridFS(testId: string, base64: string): Promise<Types.ObjectId> {
+  async saveToGridFS(filename: string, data: string): Promise<ObjectId> {
+  return new Promise((resolve, reject) => {
     const bucket = getGridFsBucket();
+    const uploadStream = bucket.openUploadStream(filename);
 
-    const buffer = Buffer.from(base64, "base64");
+    uploadStream.on("error", (err) => {
+      reject(err);
+    });
 
-    const uploadStream = bucket.openUploadStream(testId);
-    uploadStream.end(buffer);
+    uploadStream.on("finish", () => {
+      resolve(uploadStream.id); // 🔥 SAFE: chunks are fully written
+    });
 
-    return uploadStream.id as Types.ObjectId;
-  }
+    uploadStream.end(Buffer.from(data, "utf8")); 
+  });
+}
+
 
   /** GRIDFS: Fetch base64 data from GridFS */
   async fetchFromGridFS(fileId: Types.ObjectId): Promise<string> {
