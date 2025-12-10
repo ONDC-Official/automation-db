@@ -9,10 +9,14 @@ import {
   getPayloadBySessionId,
   updateSession,
   deleteSession,
+  updateFlow,
+  addFlowToSession,
+  getSessionsByNp,
 } from "../controllers/SessionDetailsController";
 
 const router = Router();
 
+router.get("/filter", getSessionsByNp);
 router.get("/", getAllSessions);
 router.get("/:sessionId", getSessionById);
 router.get("/check/:sessionId", checkSessionById);
@@ -21,5 +25,8 @@ router.post("/payload", createPayloadForSession);
 router.get("/payload/:sessionId", getPayloadBySessionId);
 router.put("/:sessionId", updateSession);
 router.delete("/:sessionId", deleteSession);
+
+router.put("/flows/:sessionId", updateFlow);
+router.post("/flows/:sessionId", addFlowToSession);
 
 export default router;
