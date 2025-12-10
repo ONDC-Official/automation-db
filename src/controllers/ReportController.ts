@@ -29,8 +29,7 @@ export const createReport = async (req: Request, res: Response): Promise<void> =
   }
 };
 
-
-export const getAllReports = async (_req: Request, res: Response): Promise<void> => {
+export const getAllReports = async (req: Request, res: Response): Promise<void> => {
   try {
     const reports = await reportService.getAllReports();
     res.json(reports);
@@ -39,15 +38,16 @@ export const getAllReports = async (_req: Request, res: Response): Promise<void>
   }
 };
 
-
 export const getReportByTestId = async (req: Request, res: Response): Promise<void> => {
   const { testId } = req.params;
+
   try {
     const report = await reportService.getReportByTestId(testId);
     if (!report) {
       res.status(404).json({ error: "Report not found" });
       return;
     }
+
     res.json(report);
   } catch (error) {
     res.status(500).json({ error: "Failed to fetch report" });
