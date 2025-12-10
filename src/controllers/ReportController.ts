@@ -50,6 +50,7 @@ export const getReportByTestId = async (req: Request, res: Response): Promise<vo
 
     res.json(report);
   } catch (error) {
+    logger.error("Error fetching report", error);
     res.status(500).json({ error: "Failed to fetch report" });
   }
 };
