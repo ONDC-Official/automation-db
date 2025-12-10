@@ -2,9 +2,19 @@ import { Report, IReport } from "../entity/Reports";
 import { ObjectId } from "mongodb";
 import { Types } from "mongoose";
 import { getGridFsBucket } from "../utils/gridfs";
+import mongoose from "mongoose";
+import { mongo } from "mongoose";
+const { GridFSBucket } = mongo;
 
 export class ReportRepository {
-  
+   private bucket;
+
+constructor() {
+  this.bucket = new GridFSBucket(mongoose.connection.db!, {
+    bucketName: "reports"
+  });
+}
+
   // Save report metadata (test_id + GridFS file_id)
   async create(reportData: Partial<IReport>) {
     return Report.create(reportData);
@@ -32,20 +42,15 @@ export class ReportRepository {
   }
 
   /** GRIDFS: Save base64 data into GridFS bucket */
-  async saveToGridFS(filename: string, data: string): Promise<ObjectId> {
-  return new Promise((resolve, reject) => {
-    const bucket = getGridFsBucket();
-    const uploadStream = bucket.openUploadStream(filename);
+async saveToGridFS(id: string, data: string) {
+  const uploadStream = this.bucket.openUploadStream(id);
+  uploadStream.end(Buffer.from(data));
 
-    uploadStream.on("error", (err) => {
-      reject(err);
+  return new Promise<mongoose.Types.ObjectId>((resolve, reject) => {
+    uploadStream.on("finish", (file: any) => {
+      resolve(new mongoose.Types.ObjectId(file._id.toString()));
     });
-
-    uploadStream.on("finish", () => {
-      resolve(uploadStream.id); // 🔥 SAFE: chunks are fully written
-    });
-
-    uploadStream.end(Buffer.from(data, "utf8")); 
+    uploadStream.on("error", reject);
   });
 }
 
