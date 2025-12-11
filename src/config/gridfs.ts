@@ -2,14 +2,16 @@ import mongoose from "mongoose";
 
 let bucket: mongoose.mongo.GridFSBucket | null = null;
 
-export const getGridFsBucket = () => {
-  if (!bucket) {
-    const db = mongoose.connection.db;
-    if (!db) throw new Error("MongoDB is not connected");
+export function getGridFsBucket(): mongoose.mongo.GridFSBucket {
+  if (bucket) return bucket;
 
-    bucket = new mongoose.mongo.GridFSBucket(db, {
-      bucketName: "reports"
-    });
+  if (!mongoose.connection.db) {
+    throw new Error("MongoDB connection not ready. Call after mongoose.connect()");
   }
+
+  bucket = new mongoose.mongo.GridFSBucket(mongoose.connection.db, {
+    bucketName: "reports",
+  });
+
   return bucket;
-};
+}

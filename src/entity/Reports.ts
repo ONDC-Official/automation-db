@@ -1,5 +1,5 @@
 import { Schema, model, Document, Types } from "mongoose";
-
+import mongoose from "mongoose";
 export interface IReport extends Document {
   test_id: string;
   file_id: Types.ObjectId; 
@@ -8,7 +8,7 @@ export interface IReport extends Document {
 const ReportSchema = new Schema<IReport>(
   {
     test_id: { type: String, required: true, unique: true },
-    file_id: { type: Schema.Types.ObjectId, required: true },
+    file_id: mongoose.Types.ObjectId
   },
   { timestamps: true }
 );
