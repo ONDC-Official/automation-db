@@ -1,51 +1,98 @@
 import logger from "../utils/logger";
 import { ReportRepository } from "../repositories/ReportRepository";
 import { IReport } from "../entity/Reports";
+import mongoose from "mongoose";
 
 export class ReportService {
   constructor(private reportRepo: ReportRepository) {}
 
+  /** Get all metadata */
   async getAllReports(): Promise<IReport[]> {
-    logger.info("Fetching all reports from database");
-    return this.reportRepo.findAll();
+    logger.info("Fetching all reports");
+    try {
+      return await this.reportRepo.findAll();
+    } catch (err) {
+      logger.error("Error fetching all reports", err);
+      throw err;
+    }
   }
 
+  /** Check if a test_id already has a report */
   async hasReportForTestId(testId: string): Promise<boolean> {
-    return this.reportRepo.existsByTestId(testId);
+    try {
+      return await this.reportRepo.existsByTestId(testId);
+    } catch (err) {
+      logger.error("Error checking report existence", err);
+      throw err;
+    }
   }
 
-  async getReportByTestId(test_id: string): Promise<{ test_id: string; data: string } | null> {
-    logger.info(`Fetching report with test_id: ${test_id}`);
-    
-    const meta = await this.reportRepo.findByTestId(test_id);
-    if (!meta) return null;
+  /** Get report metadata + GridFS data */
+  async getReportByTestId(
+    test_id: string
+  ): Promise<{ test_id: string; data: string } | null> {
+    logger.info(`Fetching report for test_id=${test_id}`);
 
-    const base64 = await this.reportRepo.fetchFromGridFS(meta.file_id);
+    try {
+      const meta = await this.reportRepo.findByTestId(test_id);
+      if (!meta || !meta.file_id) return null;
 
-    return { test_id, data: base64 };
+      const fileId = new mongoose.Types.ObjectId(meta.file_id.toString());
+      const base64 = await this.reportRepo.fetchFromGridFS(fileId);
+
+      return { test_id, data: base64 };
+    } catch (err) {
+      logger.error("Error fetching report", err);
+      throw err;
+    }
   }
 
+  /** Create a new report → save data to GridFS first */
   async createReport(reportData: { test_id: string; data: string }) {
-    logger.info(`Creating report for test_id: ${reportData.test_id}`);
+    logger.info(`Creating report for test_id=${reportData.test_id}`);
 
-    const file_id = await this.reportRepo.saveToGridFS(reportData.test_id, reportData.data);
+    try {
+      const file_id = await this.reportRepo.saveToGridFS(
+        reportData.test_id,
+        reportData.data
+      );
 
-    return this.reportRepo.create({
-      test_id: reportData.test_id,
-      file_id
-    });
+      return await this.reportRepo.create({
+        test_id: reportData.test_id,
+        file_id, // always mongoose.Types.ObjectId
+      });
+    } catch (err) {
+      logger.error("Error creating report", err);
+      throw err;
+    }
   }
 
+  /** Update an existing report by metadata _id (not test_id) */
   async updateReport(id: string, updatedData: { data: string }) {
-    logger.info(`Updating report ${id}`);
+    logger.info(`Updating report id=${id}`);
 
-    const file_id = await this.reportRepo.saveToGridFS(id, updatedData.data);
+    try {
+      const file_id = await this.reportRepo.saveToGridFS(
+        id,
+        updatedData.data
+      );
 
-    return this.reportRepo.update(id, { file_id });
+      return await this.reportRepo.update(id, { file_id });
+    } catch (err) {
+      logger.error("Error updating report", err);
+      throw err;
+    }
   }
 
+  /** Delete metadata + file (only metadata if you didn't implement file delete) */
   async deleteReport(id: string): Promise<void> {
-    logger.info(`Deleting report ${id}`);
-    await this.reportRepo.delete(id);
+    logger.info(`Deleting report id=${id}`);
+
+    try {
+      await this.reportRepo.delete(id);
+    } catch (err) {
+      logger.error("Error deleting report", err);
+      throw err;
+    }
   }
 }

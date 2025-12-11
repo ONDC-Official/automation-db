@@ -5,6 +5,8 @@ import dotenv from "dotenv";
 import logger from "./utils/logger";
 import routes from "./routes/routes";
 import { connectMongoDB } from "./mongoConfig";
+import mongoose from "mongoose";
+import { getGridFsBucket } from "./config/gridfs";
 
 dotenv.config();
 
@@ -17,7 +19,17 @@ app.use(express.urlencoded({ limit: '20mb', extended: true }));
 async function initializeApp() {
   try {
     // Connect to MongoDB
-    await connectMongoDB();
+    mongoose.connect(process.env.MONGO_URI!)
+  .then(() => {
+    console.log("Mongo Connected");
+
+    // IMPORTANT: initialize bucket AFTER connection
+    getGridFsBucket();
+
+    // start server only after bucket is ready
+    app.listen(3000, () => console.log("Server started"));
+  })
+  .catch(console.error);
 
     // Register routes
     app.use("/", routes);

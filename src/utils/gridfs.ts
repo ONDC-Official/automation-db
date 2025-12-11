@@ -1,18 +1,16 @@
-import mongoose from "mongoose";
+// gridfs.ts
+import mongoose, { mongo } from "mongoose";
+const { GridFSBucket } = mongo;
 
-// Use the GridFSBucket from mongoose's MongoDB driver
-type GridFSBucketType = mongoose.mongo.GridFSBucket;
+let bucket: mongo.GridFSBucket | null = null;
 
-let bucket: GridFSBucketType | null = null;
+export const getReportsBucket = () => {
+  if (!mongoose.connection.db) {
+    throw new Error("MongoDB is not connected yet");
+  }
 
-export const getGridFsBucket = (): GridFSBucketType => {
   if (!bucket) {
-    const db = mongoose.connection.db;
-    if (!db) {
-      throw new Error("MongoDB is not connected. Call getGridFsBucket after mongoose.connect");
-    }
-
-    bucket = new mongoose.mongo.GridFSBucket(db, {
+    bucket = new GridFSBucket(mongoose.connection.db, {
       bucketName: "reports",
     });
   }
