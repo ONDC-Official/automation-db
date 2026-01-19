@@ -49,7 +49,7 @@ export class ReportService {
 
   /** Create a new report → save data to GridFS first */
   async createReport(reportData: { test_id: string; data: string }) {
-    logger.info(`Creating report for test_id=${reportData.test_id}`);
+    logger.info(`Creating report for test_id: ${reportData.test_id}`);
 
     try {
       const file_id = await this.reportRepo.saveToGridFS(
@@ -69,13 +69,10 @@ export class ReportService {
 
   /** Update an existing report by metadata _id (not test_id) */
   async updateReport(id: string, updatedData: { data: string }) {
-    logger.info(`Updating report id=${id}`);
+    logger.info(`Updating report id: ${id}`);
 
     try {
-      const file_id = await this.reportRepo.saveToGridFS(
-        id,
-        updatedData.data
-      );
+      const file_id = await this.reportRepo.saveToGridFS(id, updatedData.data);
 
       return await this.reportRepo.update(id, { file_id });
     } catch (err) {
@@ -94,5 +91,8 @@ export class ReportService {
       logger.error("Error deleting report", err);
       throw err;
     }
+  }
+  async getReportMetaByTestId(testId: string): Promise<IReport | null> {
+    return this.reportRepo.findByTestId(testId);
   }
 }

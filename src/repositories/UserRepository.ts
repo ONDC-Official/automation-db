@@ -2,11 +2,11 @@ import { UserModel, IUser } from "../entity/User";
 
 export class UserRepository {
   async findAll() {
-    return UserModel.find().populate("sessionIds").exec();
+    return UserModel.find().exec();
   }
 
   async findByGithubId(githubId: string) {
-    return UserModel.findOne({ githubId }).populate("sessionIds").exec();
+    return UserModel.findOne({ githubId }).exec();
   }
 
   async create(userData: Partial<IUser>) {

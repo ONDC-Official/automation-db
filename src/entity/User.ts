@@ -10,7 +10,7 @@ const UserSchema = new Schema(
   {
     githubId: { type: String, required: true, unique: true },
     participantId: { type: String, required: true },
-    sessionIds: [{ type: String, ref: "UserSession" }],
+    sessionIds: [{ type: String }], // Array of session IDs (no ref needed)
   },
   { timestamps: true }
 );
