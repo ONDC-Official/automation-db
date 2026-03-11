@@ -123,5 +123,9 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add "${{ env.TARGET_FILE }}"
-          git commit -m "ci: update automation-db image tag to ${{ env.IMAGE_TAG }} (${{ env.ENVIRONMENT }})"
-          git push
+          if git diff --staged --quiet; then
+            echo "Image tag already up to date in ${{ env.TARGET_FILE }}, skipping commit."
+          else
+            git commit -m "ci: update automation-db image tag to ${{ env.IMAGE_TAG }} (${{ env.ENVIRONMENT }})"
+            git push
+          fi
