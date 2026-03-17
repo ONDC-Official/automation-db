@@ -4,7 +4,7 @@ import { IReport } from "../entity/Reports";
 import mongoose from "mongoose";
 
 export class ReportService {
-  constructor(private reportRepo: ReportRepository) {}
+  constructor(private reportRepo: ReportRepository) { }
 
   /** Get all metadata */
   async getAllReports(): Promise<IReport[]> {
@@ -39,7 +39,7 @@ export class ReportService {
 
       const fileId = new mongoose.Types.ObjectId(meta.file_id.toString());
       const base64 = await this.reportRepo.fetchFromGridFS(fileId);
-
+      logger.info(`Fetching report for test_id=${test_id} and fileId=${fileId} and base64=${base64}`);
       return { test_id, data: base64 };
     } catch (err) {
       logger.error("Error fetching report", err);
