@@ -11,8 +11,6 @@ export const createReport = async (
 ): Promise<void> => {
   const { testId } = req.params;
   const { data } = req.body;
-
-  logger.info("data from praman and our reporting service", data)
   if (!data) {
     res.status(400).json({ error: "Missing 'data' in request body" });
     return;
