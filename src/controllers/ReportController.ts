@@ -12,46 +12,47 @@ export const createReport = async (
   const { testId } = req.params;
   const { data } = req.body;
 
+  logger.info("data from praman and our reporting service", data)
   if (!data) {
     res.status(400).json({ error: "Missing 'data' in request body" });
     return;
   }
 
   try {
-  logger.info(`Received report for testId: ${testId}`);
+    logger.info(`Received report for testId: ${testId}`);
 
-  // 1️⃣ Check if report exists
-  const exists = await reportService.hasReportForTestId(testId);
+    // 1️⃣ Check if report exists
+    const exists = await reportService.hasReportForTestId(testId);
 
-  // 2️⃣ If exists → update
-  if (exists) {
-    const meta = await reportService.getReportMetaByTestId(testId);
+    // 2️⃣ If exists → update
+    if (exists) {
+      const meta = await reportService.getReportMetaByTestId(testId);
 
-    if (!meta) {
-      res.status(500).json({ error: "Report metadata not found" });
+      if (!meta) {
+        res.status(500).json({ error: "Report metadata not found" });
+        return;
+      }
+
+      const updatedReport = await reportService.updateReport(
+        meta.id.toString(),
+        { data }
+      );
+
+      res.status(200).json(updatedReport);
       return;
     }
 
-    const updatedReport = await reportService.updateReport(
-      meta.id.toString(),
-      { data }
-    );
+    // 3️⃣ Else → create
+    const report = await reportService.createReport({
+      test_id: testId,
+      data,
+    });
 
-    res.status(200).json(updatedReport);
-    return;
+    res.status(201).json(report);
+  } catch (error) {
+    logger.error("Error creating/updating report", error);
+    res.status(500).json({ error: "Failed to create/update report" });
   }
-
-  // 3️⃣ Else → create
-  const report = await reportService.createReport({
-    test_id: testId,
-    data,
-  });
-
-  res.status(201).json(report);
-} catch (error) {
-  logger.error("Error creating/updating report", error);
-  res.status(500).json({ error: "Failed to create/update report" });
-}
 };
 
 export const getAllReports = async (req: Request, res: Response): Promise<void> => {
