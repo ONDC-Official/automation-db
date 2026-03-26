@@ -1,6 +1,6 @@
 import { UserRepository } from "../repositories/UserRepository";
 import { UserModel } from "../entity/User";
-import logger from "../utils/logger";
+import logger from "@ondc/automation-logger";
 
 // Define the instance type for Mongoose User documents
 type UserDocument = InstanceType<typeof UserModel>;

@@ -1,4 +1,4 @@
-import logger from "../utils/logger";
+import logger from "@ondc/automation-logger";
 import { PayloadRepository } from "../repositories/PayloadRepository";
 
 export class PayloadService {
@@ -20,7 +20,7 @@ export class PayloadService {
 		try {
 			logger.info(`Fetching payload with ID: ${id}`);
 			const payload = await this.payloadRepo.findByPayloadId(id);
-			if (!payload) logger.warn(`Payload with ID: ${id} not found`);
+			if (!payload) logger.warning(`Payload with ID: ${id} not found`);
 			return payload;
 		} catch (error) {
 			logger.error(`Error retrieving payload with ID: ${id}`, error);
@@ -33,7 +33,7 @@ export class PayloadService {
 			logger.info(`Fetching payload with transactionId: ${transactionId}`);
 			const payload = await this.payloadRepo.findByTransactionId(transactionId);
 			if (!payload)
-				logger.warn(`Payload with transactionId: ${transactionId} not found`);
+				logger.warning(`Payload with transactionId: ${transactionId} not found`);
 			return payload;
 		} catch (error) {
 			logger.error(
@@ -52,7 +52,7 @@ export class PayloadService {
 			);
 			const foundPayloads = payloads.filter((p) => p != null);
 			if (foundPayloads.length === 0)
-				logger.warn(`No payloads found for payloadIds: ${payloadIds}`);
+				logger.warning(`No payloads found for payloadIds: ${payloadIds}`);
 			return foundPayloads;
 		} catch (error) {
 			logger.error(
@@ -108,7 +108,7 @@ export class PayloadService {
 			);
 
 			if (!payloads || payloads.length === 0) {
-				logger.warn(`No payloads found for transactionId: ${transactionId}`);
+				logger.warning(`No payloads found for transactionId: ${transactionId}`);
 			} else {
 				logger.info(
 					`Found ${payloads.length} payload(s) for transactionId: ${transactionId}`
@@ -155,7 +155,7 @@ export class PayloadService {
 				`Total payloads for domain: ${domain}, version: ${version} is ${totalCount}`
 			);
 			if (!payloads || payloads.length === 0) {
-				logger.warn(
+				logger.warning(
 					`No payloads found for domain: ${domain} and version: ${version}`
 				);
 			} else {

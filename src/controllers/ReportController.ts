@@ -1,7 +1,7 @@
 import { Request, Response } from "express";
 import { ReportService } from "../services/ReportService";
 import { ReportRepository } from "../repositories/ReportRepository";
-import logger from "../utils/logger";
+import logger from "@ondc/automation-logger";
 
 const reportService = new ReportService(new ReportRepository());
 

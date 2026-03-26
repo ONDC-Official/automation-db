@@ -1,4 +1,4 @@
-import logger from "../utils/logger";
+import logger from "@ondc/automation-logger";
 import { ReportRepository } from "../repositories/ReportRepository";
 import { IReport } from "../entity/Reports";
 import mongoose from "mongoose";
