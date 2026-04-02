@@ -27,7 +27,7 @@
     },
     "dependencies": {
         "@ondc/automation-logger": "^1.1.0",
-        "@ondc/build-tools": "^0.0.16",
+        "@ondc/build-tools": "^0.0.17",
         "@opentelemetry/auto-instrumentations-node": "0.57.1",
         "@opentelemetry/exporter-jaeger": "2.0.0",
         "@opentelemetry/exporter-prometheus": "0.200.0",
