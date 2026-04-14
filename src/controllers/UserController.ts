@@ -1,7 +1,7 @@
 import { Request, Response } from "express";
 import { UserRepository } from "../repositories/UserRepository";
 import { UserService } from "../services/UserService";
-import logger from "../utils/logger";
+import logger from "@ondc/automation-logger";
 
 // ---------------------- Constructor ----------------------
 

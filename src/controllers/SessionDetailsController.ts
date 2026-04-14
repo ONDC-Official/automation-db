@@ -1,7 +1,7 @@
 import { Request, Response } from "express";
 import { SessionDetailsRepository } from "../repositories/SessionDetailsRepository";
 import { PayloadRepository } from "../repositories/PayloadRepository";
-import logger from "../utils/logger";
+import logger from "@ondc/automation-logger";
 import { SessionDetailsService } from "../services/SessionDetailsService";
 import { SessionDetails } from "../entity/SessionDetails";
 import { UserService } from "../services/UserService";
@@ -46,7 +46,7 @@ export const getSessionById = async (req: Request, res: Response) => {
     if (session) {
       res.json(session);
     } else {
-      logger.warn(`Session not found with ID: ${sessionId}`);
+      logger.warning(`Session not found with ID: ${sessionId}`);
       res.status(404).send("Session not found");
     }
   } catch (error) {
@@ -223,7 +223,7 @@ export const getSessionsByNp = async (req: Request, res: Response) => {
   const np_id = req.query.np_id as string;
 
   if (!np_type || !np_id) {
-    logger.warn("Missing npType or npId in query params");
+    logger.warning("Missing npType or npId in query params");
     res.status(400).send("Missing npType or npId query parameters");
     return;
   }

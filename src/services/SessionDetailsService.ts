@@ -3,7 +3,7 @@ import { PayloadRepository } from "../repositories/PayloadRepository";
 import { SessionDetails } from "../entity/SessionDetails";
 import { Payload } from "../entity/Payload";
 import { PayloadDetailsDTO } from "../entity/PayloadDetailsDTO";
-import logger from "../utils/logger";
+import logger from "@ondc/automation-logger";
 
 // Define a type for session + populated payloads
 type SessionWithPayloads = InstanceType<typeof SessionDetails> & {
@@ -68,14 +68,14 @@ export class SessionDetailsService {
     // 1️⃣ Fetch session details
     const session = await this.sessionRepo.findBySessionId(sessionId);
     if (!session) {
-      logger.warn(`SessionDetails not found for sessionId: ${sessionId}`);
+      logger.warning(`SessionDetails not found for sessionId: ${sessionId}`);
       throw new Error(`SessionDetails not found for sessionId: ${sessionId}`);
     }
 
     // 2️⃣ Fetch payloads linked to this session ID
     const payloads = await this.payloadRepo.findBySessionId(sessionId);
     if (!payloads || payloads.length === 0) {
-      logger.warn(`No payloads found for sessionId: ${sessionId}`);
+      logger.warning(`No payloads found for sessionId: ${sessionId}`);
       return [];
     }
 
@@ -117,7 +117,7 @@ export class SessionDetailsService {
       logger.info(`Updating session with ID: ${sessionId}`, { updatedData });
       const updated = await this.sessionRepo.update(sessionId, updatedData);
       if (!updated) {
-        logger.warn(`Session with ID: ${sessionId} not found for update`);
+        logger.warning(`Session with ID: ${sessionId} not found for update`);
         throw new Error(`Session not found with ID: ${sessionId}`);
       }
       logger.info(`Session with ID: ${sessionId} updated successfully`);

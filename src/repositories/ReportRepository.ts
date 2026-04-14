@@ -53,29 +53,28 @@ export class ReportRepository {
   }
 
   /** Save base64 data to GridFS */
-async saveToGridFS(id: string, data: string): Promise<mongoose.Types.ObjectId> {
-  const bucket = this.getBucket();
-  const uploadStream = bucket.openUploadStream(id);
+  async saveToGridFS(id: string, data: string): Promise<mongoose.Types.ObjectId> {
+    const bucket = this.getBucket();
+    const uploadStream = bucket.openUploadStream(id);
 
-  return new Promise<mongoose.Types.ObjectId>((resolve, reject) => {
-    uploadStream.on("finish", () => {
-      // uploadStream.id is the ObjectId of the stored file
-      const fileId = uploadStream.id as mongoose.Types.ObjectId;
-      resolve(fileId);
+    return new Promise<mongoose.Types.ObjectId>((resolve, reject) => {
+      uploadStream.on("finish", () => {
+        // uploadStream.id is the ObjectId of the stored file
+        const fileId = uploadStream.id as mongoose.Types.ObjectId;
+        resolve(fileId);
+      });
+
+      uploadStream.on("error", reject);
+
+      uploadStream.end(Buffer.from(data, "base64"));
     });
-
-    uploadStream.on("error", reject);
-
-    uploadStream.end(Buffer.from(data, "base64"));
-  });
-}
+  }
 
 
   /** Fetch base64 data from GridFS */
   async fetchFromGridFS(fileId: mongoose.Types.ObjectId): Promise<string> {
     const bucket = this.getBucket();
     const chunks: Buffer[] = [];
-
     return new Promise((resolve, reject) => {
       const downloadStream = bucket.openDownloadStream(fileId);
       downloadStream.on("data", (chunk) => chunks.push(chunk));
