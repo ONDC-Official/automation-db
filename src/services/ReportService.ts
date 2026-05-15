@@ -29,7 +29,7 @@ export class ReportService {
 
   /** Get report metadata + GridFS data */
   async getReportByTestId(
-    test_id: string
+    test_id: string,
   ): Promise<{ test_id: string; data: string } | null> {
     logger.info(`Fetching report for test_id=${test_id}`);
 
@@ -48,18 +48,23 @@ export class ReportService {
   }
 
   /** Create a new report → save data to GridFS first */
-  async createReport(reportData: { test_id: string; data: string }) {
+  async createReport(reportData: {
+    test_id: string;
+    data: string;
+    user_id?: string;
+  }) {
     logger.info(`Creating report for test_id: ${reportData.test_id}`);
 
     try {
       const file_id = await this.reportRepo.saveToGridFS(
         reportData.test_id,
-        reportData.data
+        reportData.data,
       );
 
       return await this.reportRepo.create({
         test_id: reportData.test_id,
-        file_id, // always mongoose.Types.ObjectId
+        file_id,
+        ...(reportData.user_id && { user_id: reportData.user_id }),
       });
     } catch (err) {
       logger.error("Error creating report", err);
@@ -94,5 +99,8 @@ export class ReportService {
   }
   async getReportMetaByTestId(testId: string): Promise<IReport | null> {
     return this.reportRepo.findByTestId(testId);
+  }
+  async getReportsByUserId(userId: string) {
+    return await this.reportRepo.findByUserId(userId);
   }
 }

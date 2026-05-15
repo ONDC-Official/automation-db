@@ -98,8 +98,6 @@ export class SessionDetailsService {
   }
 }
 
-  // -------------------- New Methods --------------------
-
   async createSession(sessionData: Partial<InstanceType<typeof SessionDetails>>): Promise<InstanceType<typeof SessionDetails>> {
     try {
       logger.info("Creating new session", { sessionData });

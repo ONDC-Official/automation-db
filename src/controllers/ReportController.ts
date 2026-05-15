@@ -10,6 +10,7 @@ export const createReport = async (
   res: Response
 ): Promise<void> => {
   const { testId } = req.params;
+  const userId = req.query?.userId as string | undefined;
   const { data } = req.body;
   if (!data) {
     res.status(400).json({ error: "Missing 'data' in request body" });
@@ -40,11 +41,12 @@ export const createReport = async (
       return;
     }
 
-    // 3️⃣ Else → create
-    const report = await reportService.createReport({
-      test_id: testId,
-      data,
-    });
+  // 3️⃣ Else → create
+  const report = await reportService.createReport({
+    test_id: testId,
+    data,
+    ...(userId && { user_id: userId }),
+  });
 
     res.status(201).json(report);
   } catch (error) {
@@ -76,5 +78,26 @@ export const getReportByTestId = async (req: Request, res: Response): Promise<vo
   } catch (error) {
     logger.error("Error fetching report", error);
     res.status(500).json({ error: "Failed to fetch report" });
+  }
+};
+
+export const getReportsByUserId = async (
+  req: Request,
+  res: Response
+): Promise<void> => {
+  const { userId } = req.params;
+
+  try {
+    const reports = await reportService.getReportsByUserId(userId);
+
+    if (!reports || reports.length === 0) {
+      res.status(404).json({ error: "No reports found for user" });
+      return;
+    }
+
+    res.json(reports);
+  } catch (error) {
+    logger.error("Error fetching reports by userId", error);
+    res.status(500).json({ error: "Failed to fetch reports" });
   }
 };
