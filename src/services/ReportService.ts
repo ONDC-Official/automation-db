@@ -39,7 +39,6 @@ export class ReportService {
 
       const fileId = new mongoose.Types.ObjectId(meta.file_id.toString());
       const base64 = await this.reportRepo.fetchFromGridFS(fileId);
-      logger.info(`Fetching report for test_id=${test_id} and fileId=${fileId} and base64=${base64}`);
       return { test_id, data: base64 };
     } catch (err) {
       logger.error("Error fetching report", err);
