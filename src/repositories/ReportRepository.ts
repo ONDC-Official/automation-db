@@ -31,11 +31,16 @@ export class ReportRepository {
     return Report.findOne({ test_id });
   }
   async findByUserId(userId: string) {
-  return await Report.find(
-    { user_id: userId },
-    { _id: 0, test_id: 1 }
-  ).lean();
-}
+    return await Report.find(
+      { user_id: userId },
+      {
+        _id: 0,
+        test_id: 1,
+        total_tests: 1,
+        passed_tests: 1,
+      },
+    ).lean();
+  }
   /** Check if report exists */
   async existsByTestId(testId: string): Promise<boolean> {
     if (!testId) return false;

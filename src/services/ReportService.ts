@@ -4,7 +4,7 @@ import { IReport } from "../entity/Reports";
 import mongoose from "mongoose";
 
 export class ReportService {
-  constructor(private reportRepo: ReportRepository) { }
+  constructor(private reportRepo: ReportRepository) {}
 
   /** Get all metadata */
   async getAllReports(): Promise<IReport[]> {
@@ -51,6 +51,8 @@ export class ReportService {
     test_id: string;
     data: string;
     user_id?: string;
+    total_tests?: number;
+    passed_tests?: number;
   }) {
     logger.info(`Creating report for test_id: ${reportData.test_id}`);
 
@@ -63,7 +65,18 @@ export class ReportService {
       return await this.reportRepo.create({
         test_id: reportData.test_id,
         file_id,
-        ...(reportData.user_id && { user_id: reportData.user_id }),
+
+        ...(reportData.user_id && {
+          user_id: reportData.user_id,
+        }),
+
+        ...(reportData.total_tests !== undefined && {
+          total_tests: reportData.total_tests,
+        }),
+
+        ...(reportData.passed_tests !== undefined && {
+          passed_tests: reportData.passed_tests,
+        }),
       });
     } catch (err) {
       logger.error("Error creating report", err);
