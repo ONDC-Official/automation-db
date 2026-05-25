@@ -4,7 +4,7 @@ import { IReport } from "../entity/Reports";
 import mongoose from "mongoose";
 
 export class ReportService {
-  constructor(private reportRepo: ReportRepository) { }
+  constructor(private reportRepo: ReportRepository) {}
 
   /** Get all metadata */
   async getAllReports(): Promise<IReport[]> {
@@ -29,7 +29,7 @@ export class ReportService {
 
   /** Get report metadata + GridFS data */
   async getReportByTestId(
-    test_id: string
+    test_id: string,
   ): Promise<{ test_id: string; data: string } | null> {
     logger.info(`Fetching report for test_id=${test_id}`);
 
@@ -39,7 +39,6 @@ export class ReportService {
 
       const fileId = new mongoose.Types.ObjectId(meta.file_id.toString());
       const base64 = await this.reportRepo.fetchFromGridFS(fileId);
-      logger.info(`Fetching report for test_id=${test_id} and fileId=${fileId} and base64=${base64}`);
       return { test_id, data: base64 };
     } catch (err) {
       logger.error("Error fetching report", err);
@@ -48,18 +47,36 @@ export class ReportService {
   }
 
   /** Create a new report → save data to GridFS first */
-  async createReport(reportData: { test_id: string; data: string }) {
+  async createReport(reportData: {
+    test_id: string;
+    data: string;
+    user_id?: string;
+    total_tests?: number;
+    passed_tests?: number;
+  }) {
     logger.info(`Creating report for test_id: ${reportData.test_id}`);
 
     try {
       const file_id = await this.reportRepo.saveToGridFS(
         reportData.test_id,
-        reportData.data
+        reportData.data,
       );
 
       return await this.reportRepo.create({
         test_id: reportData.test_id,
-        file_id, // always mongoose.Types.ObjectId
+        file_id,
+
+        ...(reportData.user_id && {
+          user_id: reportData.user_id,
+        }),
+
+        ...(reportData.total_tests !== undefined && {
+          total_tests: reportData.total_tests,
+        }),
+
+        ...(reportData.passed_tests !== undefined && {
+          passed_tests: reportData.passed_tests,
+        }),
       });
     } catch (err) {
       logger.error("Error creating report", err);
@@ -94,5 +111,8 @@ export class ReportService {
   }
   async getReportMetaByTestId(testId: string): Promise<IReport | null> {
     return this.reportRepo.findByTestId(testId);
+  }
+  async getReportsByUserId(userId: string) {
+    return await this.reportRepo.findByUserId(userId);
   }
 }

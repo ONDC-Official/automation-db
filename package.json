@@ -40,6 +40,7 @@
         "body-parser": "^1.20.3",
         "express": "^4.21.2",
         "lodash": "^4.17.21",
+        "mochawesome-report-generator": "^6.3.2",
         "mongodb": "^6.18.0",
         "mongoose": "^8.18.3",
         "multer": "^2.1.1",
