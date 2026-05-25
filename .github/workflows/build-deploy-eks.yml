@@ -4,7 +4,7 @@ on:
   push:
     branches:
       - main
-      - develop
+      - 'release-staging*'
 
 permissions:
   packages: write
@@ -12,6 +12,7 @@ permissions:
 jobs:
   build-and-push-image:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -35,24 +36,30 @@ jobs:
         run: |
           SEMVER=$(node -p "require('./package.json').version")
           SHORT_SHA=$(git rev-parse --short=7 HEAD)
-          if [ "${{ github.ref_name }}" = "main" ]; then
-            ENV_PREFIX="prod"
-            echo "ENVIRONMENT=prod" >> $GITHUB_ENV
-            echo "TARGET_FILE=k8/aws/helm/service-layer/values-prod.yaml" >> $GITHUB_ENV
+
+          if [[ "${{ github.ref_name }}" == release-staging* ]]; then
+            ENV_PREFIX="staging"
+            echo "ENVIRONMENT=staging" >> $GITHUB_ENV
+            echo "TARGET_FILE=k8/aws/helm/service-layer/values-staging.yaml" >> $GITHUB_ENV
           else
             ENV_PREFIX="dev"
             echo "ENVIRONMENT=dev" >> $GITHUB_ENV
             echo "TARGET_FILE=k8/aws/helm/service-layer/values.yaml" >> $GITHUB_ENV
           fi
+
           IMAGE_TAG="${ENV_PREFIX}-${SEMVER}-${SHORT_SHA}"
+
           echo "SEMVER=${SEMVER}" >> $GITHUB_ENV
           echo "IMAGE_TAG=${IMAGE_TAG}" >> $GITHUB_ENV
+
           {
             echo 'IMAGE_TAGS<<EOF'
-            echo "ghcr.io/${{ env.REPO_LOWER }}:${IMAGE_TAG}"
-            if [ "${{ github.ref_name }}" = "main" ]; then
-              echo "ghcr.io/${{ env.REPO_LOWER }}:latest"
+            echo "ghcr.io/${REPO_LOWER}:${IMAGE_TAG}"
+
+            if [[ "${{ github.ref_name }}" == release-staging* ]]; then
+              echo "ghcr.io/${REPO_LOWER}:latest"
             fi
+
             echo EOF
           } >> $GITHUB_ENV
 
@@ -104,12 +111,16 @@ jobs:
 
           in_db_service = False
           result = []
+
           for line in lines:
-              # Top-level keys have no leading whitespace — use them as section boundaries
+              # Detect section boundaries
               if re.match(r'^[a-zA-Z]', line):
                   in_db_service = line.strip().startswith('dbService:')
+
+              # Update tag inside dbService section
               if in_db_service and re.match(r'^\s+tag:\s', line):
                   line = re.sub(r'(tag:\s).*', rf'\g<1>{image_tag}', line)
+
               result.append(line)
 
           with open(target, 'w') as f:
@@ -122,9 +133,12 @@ jobs:
       - name: Commit and push tag update to IaC repo
         run: |
           cd automation-iac
+
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
+
           git add "${{ env.TARGET_FILE }}"
+
           if git diff --staged --quiet; then
             echo "Image tag already up to date in ${{ env.TARGET_FILE }}, skipping commit."
           else
