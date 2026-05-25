@@ -102,6 +102,16 @@ export class ProtocolService {
                     .find(flowFilter, { projection: { _id: 0 } })
                     .toArray()
                     .then((docs) => {
+                        docs.sort((a, b) => {
+                            const oa = (a as any).meta?.order;
+                            const ob = (b as any).meta?.order;
+                            const hasA = typeof oa === "number";
+                            const hasB = typeof ob === "number";
+                            if (hasA && hasB && oa !== ob) return oa - ob;
+                            if (hasA && !hasB) return -1;
+                            if (!hasA && hasB) return 1;
+                            return String(a.flowId).localeCompare(String(b.flowId));
+                        });
                         result.flows = docs;
                     }),
             );
