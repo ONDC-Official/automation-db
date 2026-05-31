@@ -22,7 +22,8 @@ export const createReport = async (
     return;
   }
   try {
-    logger.info(`Received report for testId: ${testId}`);
+    logger.info(`Received report for testId: ${testId},flow_summary:${JSON.stringify(flow_summary)}, data:${JSON.stringify(req.body)}`);
+
     await generator.create(data, {
       reportDir: reportDir,
       reportTitle: `Pramaan Test Report ID: ${testId} generated at: ${JSON.stringify(
