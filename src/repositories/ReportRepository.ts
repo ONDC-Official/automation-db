@@ -38,6 +38,7 @@ async findByUserId(userId: string) {
       test_id: 1,
       total_tests: 1,
       passed_tests: 1,
+      flow_summary: 1,
       createdAt: 1,
       updatedAt: 1,
     }
