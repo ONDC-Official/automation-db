@@ -53,6 +53,7 @@ export class ReportService {
     user_id?: string;
     total_tests?: number;
     passed_tests?: number;
+    flow_summary?: Record<string, { total: number; completed: number }>;
   }) {
     logger.info(`Creating report for test_id: ${reportData.test_id}`);
 
@@ -77,6 +78,10 @@ export class ReportService {
         ...(reportData.passed_tests !== undefined && {
           passed_tests: reportData.passed_tests,
         }),
+
+        ...(reportData.flow_summary && {
+          flow_summary: reportData.flow_summary,
+        }),
       });
     } catch (err) {
       logger.error("Error creating report", err);
@@ -85,13 +90,16 @@ export class ReportService {
   }
 
   /** Update an existing report by metadata _id (not test_id) */
-  async updateReport(id: string, updatedData: { data: string }) {
+  async updateReport(id: string, updatedData: { data: string; flow_summary?: Record<string, { total: number; completed: number }> }) {
     logger.info(`Updating report id: ${id}`);
 
     try {
       const file_id = await this.reportRepo.saveToGridFS(id, updatedData.data);
 
-      return await this.reportRepo.update(id, { file_id });
+      return await this.reportRepo.update(id, {
+        file_id,
+        ...(updatedData.flow_summary && { flow_summary: updatedData.flow_summary }),
+      });
     } catch (err) {
       logger.error("Error updating report", err);
       throw err;

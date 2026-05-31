@@ -16,7 +16,7 @@ export const createReport = async (
 ): Promise<void> => {
   const { testId } = req.params;
   const userId = req.query?.userId as string | undefined;
-  const { data } = req.body;
+  const { data, flow_summary } = req.body;
   if (!data) {
     res.status(400).json({ error: "Missing 'data' in request body" });
     return;
@@ -34,7 +34,6 @@ export const createReport = async (
       inlineAssets: true,
     });
     const reportPath = path.join(reportDir, `${testId}_report.html`);
-
     const reportContent = await fsPromise.readFile(reportPath, "utf-8");
     const base64Report = `data:text/html;base64,${Buffer.from(
       reportContent
@@ -53,13 +52,13 @@ export const createReport = async (
 
       const updatedReport = await reportService.updateReport(
         meta.id.toString(),
-        { data: base64Report }
+        { data: base64Report, flow_summary }
       );
 
       res.status(200).json(updatedReport);
       return;
     }
-    logger.info("data from pramaan=>>>>>>", JSON.stringify(data));
+    logger.info("data from pramaan=>>>>", JSON.stringify(data));
 
     // 3️⃣ Else → create
     const report = await reportService.createReport({
@@ -68,6 +67,7 @@ export const createReport = async (
       ...(userId && { user_id: userId }),
       total_tests: data?.stats?.tests,
       passed_tests: data?.stats?.passes,
+      ...(flow_summary && { flow_summary }),
     });
 
     res.status(201).json(report);
