@@ -16,29 +16,29 @@ export const createReport = async (
 ): Promise<void> => {
   const { testId } = req.params;
   const userId = req.query?.userId as string | undefined;
-  const { data } = req.body;
+  const { data, flow_summary } = req.body;
   if (!data) {
     res.status(400).json({ error: "Missing 'data' in request body" });
     return;
   }
   try {
-    logger.info(`Received report for testId: ${testId}`);
-    await generator.create(data, {
-        reportDir: reportDir,
-        reportTitle: `Pramaan Test Report ID: ${testId} generated at: ${JSON.stringify(
-          new Date(Date.now())
-        )}`,
-        reportPageTitle: `${testId}_report`,
-        reportFilename: `${testId}_report`,
-        overwrite: true,
-        inlineAssets: true,
-      });
-    const reportPath = path.join(reportDir, `${testId}_report.html`);
+    logger.info(`Received report for testId: ${testId},flow_summary:${JSON.stringify(flow_summary)}, data:${JSON.stringify(req.body)}`);
 
-      const reportContent = await fsPromise.readFile(reportPath, "utf-8");
-      const base64Report = `data:text/html;base64,${Buffer.from(
-        reportContent
-      ).toString("base64")}`;
+    await generator.create(data, {
+      reportDir: reportDir,
+      reportTitle: `Pramaan Test Report ID: ${testId} generated at: ${JSON.stringify(
+        new Date(Date.now())
+      )}`,
+      reportPageTitle: `${testId}_report`,
+      reportFilename: `${testId}_report`,
+      overwrite: true,
+      inlineAssets: true,
+    });
+    const reportPath = path.join(reportDir, `${testId}_report.html`);
+    const reportContent = await fsPromise.readFile(reportPath, "utf-8");
+    const base64Report = `data:text/html;base64,${Buffer.from(
+      reportContent
+    ).toString("base64")}`;
     // 1️⃣ Check if report exists
     const exists = await reportService.hasReportForTestId(testId);
 
@@ -53,21 +53,23 @@ export const createReport = async (
 
       const updatedReport = await reportService.updateReport(
         meta.id.toString(),
-        { data: base64Report }
+        { data: base64Report, flow_summary }
       );
 
       res.status(200).json(updatedReport);
       return;
     }
+    logger.info("data from pramaan=>>>>", JSON.stringify(data));
 
-  // 3️⃣ Else → create
-const report = await reportService.createReport({
-  test_id: testId,
-  data: base64Report,
-  ...(userId && { user_id: userId }),
-  total_tests: data?.stats?.tests,
-  passed_tests: data?.stats?.passes,
-});
+    // 3️⃣ Else → create
+    const report = await reportService.createReport({
+      test_id: testId,
+      data: base64Report,
+      ...(userId && { user_id: userId }),
+      total_tests: data?.stats?.tests,
+      passed_tests: data?.stats?.passes,
+      ...(flow_summary && { flow_summary }),
+    });
 
     res.status(201).json(report);
   } catch (error) {
