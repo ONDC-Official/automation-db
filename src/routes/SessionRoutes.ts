@@ -12,6 +12,7 @@ import {
   updateFlow,
   addFlowToSession,
   getSessionsByNp,
+  getSubscriberUrlsByUserId,
 } from "../controllers/SessionDetailsController";
 
 const router = Router();
@@ -28,5 +29,7 @@ router.delete("/:sessionId", deleteSession);
 
 router.put("/flows/:sessionId", updateFlow);
 router.post("/flows/:sessionId", addFlowToSession);
+
+router.get("/subscriber-urls/:userId", getSubscriberUrlsByUserId);
 
 export default router;

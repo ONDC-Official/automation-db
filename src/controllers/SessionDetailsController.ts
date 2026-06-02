@@ -286,3 +286,24 @@ export const getSessionsByNp = async (req: Request, res: Response) => {
     res.status(500).send(error.message || "Error retrieving session IDs");
   }
 };
+
+/**
+ * Get all distinct subscriber URLs (npId) for a given userId
+ */
+export const getSubscriberUrlsByUserId = async (req: Request, res: Response) => {
+  const { userId } = req.params;
+
+  if (!userId) {
+    res.status(400).send("userId is required");
+    return;
+  }
+
+  try {
+    logger.info(`Fetching subscriber URLs for userId=${userId}`);
+    const subscriberUrls = await sessionDetailsService.getSubscriberUrlsByUserId(userId);
+    res.json({ subscriberUrls });
+  } catch (error: any) {
+    logger.error(`Error fetching subscriber URLs for userId=${userId}`, error);
+    res.status(500).send(error.message || "Error retrieving subscriber URLs");
+  }
+};

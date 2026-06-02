@@ -110,6 +110,15 @@ export class SessionDetailsRepository {
   }
 
   async findByNpTypeAndNpId(npType: string, npId: string) {
-  return SessionDetails.find({ npType: npType, npId: npId }).exec();
-}
+    return SessionDetails.find({ npType: npType, npId: npId }).exec();
+  }
+
+  // Get all distinct npId (subscriber URLs) for a given userId
+  async findDistinctNpIdsByUserId(userId: string): Promise<string[]> {
+    const results = await SessionDetails.distinct("npId", {
+      userId,
+      npId: { $ne: null, $exists: true },
+    }).exec();
+    return results.filter(Boolean) as string[];
+  }
 }

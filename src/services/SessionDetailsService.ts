@@ -196,4 +196,19 @@ export class SessionDetailsService {
       throw new Error("Error retrieving sessions by npType and npId");
     }
   }
+
+  async getSubscriberUrlsByUserId(userId: string): Promise<string[]> {
+    if (!userId) {
+      throw new Error("userId must be provided");
+    }
+    try {
+      logger.info(`Fetching distinct subscriber URLs (npId) for userId=${userId}`);
+      const urls = await this.sessionRepo.findDistinctNpIdsByUserId(userId);
+      logger.info(`Found ${urls.length} subscriber URL(s) for userId=${userId}`);
+      return urls;
+    } catch (error) {
+      logger.error(`Error fetching subscriber URLs for userId=${userId}`, error);
+      throw new Error("Error retrieving subscriber URLs by userId");
+    }
+  }
 }
