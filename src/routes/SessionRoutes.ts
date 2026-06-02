@@ -17,19 +17,23 @@ import {
 
 const router = Router();
 
+// ⚠️ Specific routes MUST come before wildcard /:sessionId
 router.get("/filter", getSessionsByNp);
+router.get("/subscriber-urls/:userId", getSubscriberUrlsByUserId);
+router.get("/check/:sessionId", checkSessionById);
+router.get("/payload/:sessionId", getPayloadBySessionId);
 router.get("/", getAllSessions);
 router.get("/:sessionId", getSessionById);
-router.get("/check/:sessionId", checkSessionById);
+
 router.post("/", createSession);
 router.post("/payload", createPayloadForSession);
-router.get("/payload/:sessionId", getPayloadBySessionId);
-router.put("/:sessionId", updateSession);
-router.delete("/:sessionId", deleteSession);
 
 router.put("/flows/:sessionId", updateFlow);
+router.put("/:sessionId", updateSession);
+
 router.post("/flows/:sessionId", addFlowToSession);
 
-router.get("/subscriber-urls/:userId", getSubscriberUrlsByUserId);
+router.delete("/:sessionId", deleteSession);
 
 export default router;
+
