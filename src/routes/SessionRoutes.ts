@@ -13,6 +13,7 @@ import {
   addFlowToSession,
   getSessionsByNp,
   getSubscriberUrlsByUserId,
+  saveSessionAnalytics,
 } from "../controllers/SessionDetailsController";
 
 const router = Router();
@@ -32,6 +33,7 @@ router.put("/flows/:sessionId", updateFlow);
 router.put("/:sessionId", updateSession);
 
 router.post("/flows/:sessionId", addFlowToSession);
+router.post("/analytics/:sessionId", saveSessionAnalytics);
 
 router.delete("/:sessionId", deleteSession);
 

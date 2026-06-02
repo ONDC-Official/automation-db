@@ -130,4 +130,23 @@ export class SessionDetailsRepository {
 
     return results.filter(Boolean) as string[];
   }
+
+  // Save flowSummary and flowMap (pass/fail per flow) after report generation
+  async saveSessionAnalytics(
+    sessionId: string,
+    flowSummary: Record<string, { total: number; completed: number }>,
+    flowMap: Record<string, "PASS" | "FAIL">
+  ) {
+    return SessionDetails.findOneAndUpdate(
+      { sessionId },
+      {
+        $set: {
+          flowSummary,
+          flowMap,
+          reportExists: true,
+        },
+      },
+      { new: true }
+    ).exec();
+  }
 }

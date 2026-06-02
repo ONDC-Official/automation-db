@@ -7,9 +7,14 @@ export interface IFlow {
   payloads?: string[];
 }
 
+export interface IFlowSummaryEntry {
+  total: number;
+  completed: number;
+}
+
 export interface ISessionDetails extends Document {
   sessionId: string;
-  npType: string;        
+  npType: string;
   sessionType: SessionType;
   version?: string | null;
   npId?: string | null;
@@ -17,6 +22,10 @@ export interface ISessionDetails extends Document {
   userId?: string | null;
   flows?: IFlow[];
   reportExists?: boolean;
+  // flow_summary: per-tag summary (MANDATORY, OPTIONAL, REPORTABLE)
+  flowSummary?: Record<string, IFlowSummaryEntry>;
+  // flowMap: per-flow pass/fail result
+  flowMap?: Record<string, "PASS" | "FAIL">;
   createdAt?: Date;
   updatedAt?: Date;
 }
@@ -40,9 +49,12 @@ const SessionDetailsSchema = new Schema<ISessionDetails>(
     domain: { type: String },
     userId: { type: String },
     flows: [FlowSchema],
-    reportExists: { type: Boolean, default: false }
+    reportExists: { type: Boolean, default: false },
+    flowSummary: { type: Schema.Types.Mixed, default: null },
+    flowMap: { type: Schema.Types.Mixed, default: null },
   },
   { timestamps: true }
 );
 
 export const SessionDetails = model<ISessionDetails>("SessionDetails", SessionDetailsSchema);
+
