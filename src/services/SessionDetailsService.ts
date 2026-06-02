@@ -60,43 +60,43 @@ export class SessionDetailsService {
   }
 
   async getPayloadDetails(sessionId: string): Promise<PayloadDetailsDTO[]> {
-  if (!sessionId) throw new Error("Session ID cannot be undefined");
+    if (!sessionId) throw new Error("Session ID cannot be undefined");
 
-  try {
-    logger.info(`Fetching payload details for session ID: ${sessionId}`);
+    try {
+      logger.info(`Fetching payload details for session ID: ${sessionId}`);
 
-    // 1️⃣ Fetch session details
-    const session = await this.sessionRepo.findBySessionId(sessionId);
-    if (!session) {
-      logger.warning(`SessionDetails not found for sessionId: ${sessionId}`);
-      throw new Error(`SessionDetails not found for sessionId: ${sessionId}`);
+      // 1️⃣ Fetch session details
+      const session = await this.sessionRepo.findBySessionId(sessionId);
+      if (!session) {
+        logger.warning(`SessionDetails not found for sessionId: ${sessionId}`);
+        throw new Error(`SessionDetails not found for sessionId: ${sessionId}`);
+      }
+
+      // 2️⃣ Fetch payloads linked to this session ID
+      const payloads = await this.payloadRepo.findBySessionId(sessionId);
+      if (!payloads || payloads.length === 0) {
+        logger.warning(`No payloads found for sessionId: ${sessionId}`);
+        return [];
+      }
+
+      // 3️⃣ Map payloads into DTOs
+      const domain = session.domain ?? "defaultDomain";
+
+      const payloadDetails = payloads.map(
+        (payload: InstanceType<typeof Payload>) =>
+          new PayloadDetailsDTO(session.npType, domain, payload)
+      );
+
+      logger.info(
+        `Fetched ${payloadDetails.length} payload(s) for sessionId: ${sessionId}`
+      );
+
+      return payloadDetails;
+    } catch (error) {
+      logger.error(`Error retrieving payload details for sessionId: ${sessionId}`, error);
+      throw new Error("Error retrieving payload details");
     }
-
-    // 2️⃣ Fetch payloads linked to this session ID
-    const payloads = await this.payloadRepo.findBySessionId(sessionId);
-    if (!payloads || payloads.length === 0) {
-      logger.warning(`No payloads found for sessionId: ${sessionId}`);
-      return [];
-    }
-
-    // 3️⃣ Map payloads into DTOs
-    const domain = session.domain ?? "defaultDomain";
-
-    const payloadDetails = payloads.map(
-      (payload: InstanceType<typeof Payload>) =>
-        new PayloadDetailsDTO(session.npType, domain, payload)
-    );
-
-    logger.info(
-      `Fetched ${payloadDetails.length} payload(s) for sessionId: ${sessionId}`
-    );
-
-    return payloadDetails;
-  } catch (error) {
-    logger.error(`Error retrieving payload details for sessionId: ${sessionId}`, error);
-    throw new Error("Error retrieving payload details");
   }
-}
 
   async createSession(sessionData: Partial<InstanceType<typeof SessionDetails>>): Promise<InstanceType<typeof SessionDetails>> {
     try {
@@ -137,7 +137,7 @@ export class SessionDetailsService {
     }
   }
 
- // -------------------- Flow Management --------------------
+  // -------------------- Flow Management --------------------
 
   async addFlowToSession(sessionId: string, flow: { id: string; status: string; payloads?: string[] }) {
     try {
@@ -198,6 +198,7 @@ export class SessionDetailsService {
   }
 
   async getSubscriberUrlsByUserId(userId: string): Promise<string[]> {
+
     if (!userId) {
       throw new Error("userId must be provided");
     }
