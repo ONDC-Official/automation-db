@@ -1,4 +1,5 @@
 import { SessionDetails, ISessionDetails } from "../entity/SessionDetails";
+import { UserModel } from "../entity/User";
 
 export class SessionDetailsRepository {
   // Find SessionDetails by sessionId
@@ -113,12 +114,20 @@ export class SessionDetailsRepository {
     return SessionDetails.find({ npType: npType, npId: npId }).exec();
   }
 
-  // Get all distinct npId (subscriber URLs) for a given userId
+  // Get all distinct npId (subscriber URLs) for a given userId (githubId)
   async findDistinctNpIdsByUserId(userId: string): Promise<string[]> {
+    // Step 1: Find the user and get their sessionIds
+    const user = await UserModel.findOne({ githubId: userId }).exec();
+    if (!user || !user.sessionIds || user.sessionIds.length === 0) {
+      return [];
+    }
+
+    // Step 2: Get distinct npId values from those sessions
     const results = await SessionDetails.distinct("npId", {
-      userId,
+      sessionId: { $in: user.sessionIds },
       npId: { $ne: null, $exists: true },
     }).exec();
+
     return results.filter(Boolean) as string[];
   }
 }
