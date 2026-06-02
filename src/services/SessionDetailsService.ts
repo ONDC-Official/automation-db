@@ -212,4 +212,20 @@ export class SessionDetailsService {
       throw new Error("Error retrieving subscriber URLs by userId");
     }
   }
+
+  async saveSessionAnalytics(
+    sessionId: string,
+    flowSummary: Record<string, { total: number; completed: number }>,
+    flowMap: Record<string, "PASS" | "FAIL">
+  ): Promise<void> {
+    if (!sessionId) throw new Error("sessionId must be provided");
+    try {
+      logger.info(`Saving analytics for session=${sessionId}`);
+      await this.sessionRepo.saveSessionAnalytics(sessionId, flowSummary, flowMap);
+      logger.info(`Analytics saved for session=${sessionId}`);
+    } catch (error) {
+      logger.error(`Error saving analytics for session=${sessionId}`, error);
+      throw new Error("Error saving session analytics");
+    }
+  }
 }

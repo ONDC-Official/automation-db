@@ -14,7 +14,7 @@ const sessionRepo = new SessionDetailsRepository();
 const payloadRepo = new PayloadRepository();
 const userRepo = new UserRepository()
 const reportRepo = new ReportRepository();
-const reportService = new ReportService(reportRepo); 
+const reportService = new ReportService(reportRepo);
 const sessionDetailsService = new SessionDetailsService(
   sessionRepo,
   payloadRepo
@@ -81,7 +81,7 @@ export const createSession = async (req: Request, res: Response) => {
       sessionData
     );
 
-    if(sessionData?.userId && sessionData?.sessionId) {
+    if (sessionData?.userId && sessionData?.sessionId) {
       await userService.addSessionToUser(sessionData?.userId, sessionData?.sessionId)
     }
 
@@ -165,7 +165,7 @@ export const getPayloadBySessionId = async (req: Request, res: Response) => {
 /**
  * Update flow status in a session
  */
- export const updateFlow = async (req: Request, res: Response): Promise<void> => {
+export const updateFlow = async (req: Request, res: Response): Promise<void> => {
   const { sessionId } = req.params;
   const { flow } = req.body;
 
@@ -199,8 +199,8 @@ export const addFlowToSession = async (req: Request, res: Response): Promise<voi
   const { id, status, payloads } = req.body;
 
   if (!id || !status) {
-     res.status(400).send("Flow id and status are required");
-     return
+    res.status(400).send("Flow id and status are required");
+    return
   }
 
   try {
@@ -208,8 +208,8 @@ export const addFlowToSession = async (req: Request, res: Response): Promise<voi
     const updatedSession = await sessionDetailsService.addFlowToSession(sessionId, { id, status, payloads });
 
     if (!updatedSession) {
-       res.status(400).send("Session not found");
-       return
+      res.status(400).send("Session not found");
+      return
     }
 
     res.json(updatedSession);
@@ -250,8 +250,8 @@ export const getSessionsByNp = async (req: Request, res: Response) => {
           s.createdAt instanceof Date
             ? s.createdAt.toISOString()
             : typeof s.createdAt === "string"
-            ? new Date(s.createdAt).toISOString()
-            : null;
+              ? new Date(s.createdAt).toISOString()
+              : null;
 
         const prefixedTestId = `PW_${sessionId}`;
 
@@ -307,5 +307,33 @@ export const getSubscriberUrlsByUserId = async (req: Request, res: Response) => 
   } catch (error: any) {
     logger.error(`Error fetching subscriber URLs for userId=${userId}`, error);
     res.status(500).send(error.message || "Error retrieving subscriber URLs");
+  }
+};
+
+/**
+ * Save flow_summary and flowMap (pass/fail per flow) after report generation
+ * POST /api/sessions/:sessionId/analytics
+ * Body: { flowSummary: {...}, flowMap: { flowId: "PASS"|"FAIL" } }
+ */
+export const saveSessionAnalytics = async (req: Request, res: Response) => {
+  const { sessionId } = req.params;
+  const { flowSummary, flowMap } = req.body;
+
+  if (!sessionId) {
+    res.status(400).json({ error: true, message: "sessionId is required" });
+    return;
+  }
+  if (!flowSummary || !flowMap) {
+    res.status(400).json({ error: true, message: "flowSummary and flowMap are required" });
+    return;
+  }
+
+  try {
+    logger.info(`Saving analytics for sessionId=${sessionId}`);
+    await sessionDetailsService.saveSessionAnalytics(sessionId, flowSummary, flowMap);
+    res.json({ success: true, message: "Analytics saved" });
+  } catch (error: any) {
+    logger.error(`Error saving analytics for sessionId=${sessionId}`, error);
+    res.status(500).json({ error: true, message: error.message || "Error saving analytics" });
   }
 };
