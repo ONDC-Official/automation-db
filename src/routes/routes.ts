@@ -15,7 +15,6 @@ router.use("/api/sessions", SessionRoutes);
 router.use("/payload", PayloadRoutes);
 router.use("/report", ReportRoutes);
 router.use("/user", UserRoutes);
-
 router.use("/protocol-specs", ProtocolRoutes);
 
 export default router;
