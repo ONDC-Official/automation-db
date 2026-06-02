@@ -273,6 +273,8 @@ export const getSessionsByNp = async (req: Request, res: Response) => {
           sessionId,
           reportExists,
           createdAt,
+          userId: s.userId ?? null,
+          flows: s.flows ?? [],
         };
       })
     );
