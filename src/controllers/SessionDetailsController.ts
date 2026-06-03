@@ -275,6 +275,8 @@ export const getSessionsByNp = async (req: Request, res: Response) => {
           createdAt,
           userId: s.userId ?? null,
           flows: s.flows ?? [],
+          flowSummary: s.flowSummary ?? null,
+          flowMap: s.flowMap ?? null,
         };
       })
     );
