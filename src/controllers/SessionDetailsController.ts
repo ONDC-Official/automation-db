@@ -313,6 +313,42 @@ export const getSubscriberUrlsByUserId = async (req: Request, res: Response) => 
 };
 
 /**
+ * Upsert a session — create if not exists, update fields if it does
+ * POST /api/sessions/upsert
+ * Body: { sessionId, userId?, npType, npId?, domain?, version? }
+ */
+export const upsertSession = async (req: Request, res: Response) => {
+  const { sessionId, userId, npType, npId, domain, version } = req.body;
+
+  if (!sessionId || !npType) {
+    res.status(400).json({ error: true, message: "sessionId and npType are required" });
+    return;
+  }
+
+  try {
+    logger.info(`Upserting session: ${sessionId}`);
+    const result = await sessionDetailsService.upsertSession(sessionId, {
+      userId,
+      npType,
+      npId,
+      domain,
+      version,
+    });
+
+    if (userId && sessionId) {
+      userService.addSessionToUser(userId, sessionId).catch((err) =>
+        logger.error(`Failed to link session ${sessionId} to user ${userId}`, err)
+      );
+    }
+
+    res.status(200).json(result);
+  } catch (error: any) {
+    logger.error(`Error upserting session ${sessionId}`, error);
+    res.status(500).json({ error: true, message: error.message || "Error upserting session" });
+  }
+};
+
+/**
  * Save flow_summary and flowMap (pass/fail per flow) after report generation
  * POST /api/sessions/:sessionId/analytics
  * Body: { flowSummary: {...}, flowMap: { flowId: "PASS"|"FAIL" } }
