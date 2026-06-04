@@ -117,7 +117,7 @@ export class SessionDetailsRepository {
   // Get all distinct npId (subscriber URLs) for a given userId (githubId)
   async findDistinctNpIdsByUserId(userId: string): Promise<string[]> {
     // Step 1: Find the user and get their sessionIds
-    const user = await UserModel.findOne({ githubId: userId }).exec();
+    const user = await UserModel.findOne({ userId: userId }).exec();
     if (!user || !user.sessionIds || user.sessionIds.length === 0) {
       return [];
     }
