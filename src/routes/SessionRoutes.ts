@@ -14,6 +14,7 @@ import {
   getSessionsByNp,
   getSubscriberUrlsByUserId,
   saveSessionAnalytics,
+  upsertSession,
 } from "../controllers/SessionDetailsController";
 
 const router = Router();
@@ -27,6 +28,7 @@ router.get("/", getAllSessions);
 router.get("/:sessionId", getSessionById);
 
 router.post("/", createSession);
+router.post("/upsert", upsertSession);
 router.post("/payload", createPayloadForSession);
 
 router.put("/flows/:sessionId", updateFlow);

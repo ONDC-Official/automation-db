@@ -213,6 +213,27 @@ export class SessionDetailsService {
     }
   }
 
+  async upsertSession(
+    sessionId: string,
+    data: {
+      userId?: string;
+      npType: string;
+      npId?: string;
+      domain?: string;
+      version?: string;
+    }
+  ) {
+    try {
+      logger.info(`Upserting session with ID: ${sessionId}`, { data });
+      const result = await this.sessionRepo.upsertSession(sessionId, data);
+      logger.info(`Session upserted successfully: ${sessionId}`);
+      return result;
+    } catch (error) {
+      logger.error(`Error upserting session ${sessionId}`, error);
+      throw new Error("Error upserting session");
+    }
+  }
+
   async saveSessionAnalytics(
     sessionId: string,
     flowSummary: Record<string, { total: number; completed: number }>,

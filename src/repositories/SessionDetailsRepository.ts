@@ -131,6 +131,27 @@ export class SessionDetailsRepository {
     return results.filter(Boolean) as string[];
   }
 
+  // Upsert a session — creates it if not found, updates fields if it exists
+  async upsertSession(
+    sessionId: string,
+    data: {
+      userId?: string;
+      npType: string;
+      npId?: string;
+      domain?: string;
+      version?: string;
+    }
+  ) {
+    return SessionDetails.findOneAndUpdate(
+      { sessionId },
+      {
+        $setOnInsert: { sessionId, sessionType: "AUTOMATION" },
+        $set: data,
+      },
+      { upsert: true, new: true }
+    ).exec();
+  }
+
   // Save flowSummary and flowMap (pass/fail per flow) after report generation
   async saveSessionAnalytics(
     sessionId: string,
