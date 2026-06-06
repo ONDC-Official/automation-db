@@ -111,6 +111,7 @@ export class SessionDetailsRepository {
   }
 
   async findByNpTypeAndNpId(npType: string, npId: string) {
+    //need to filter by domain and version also in future
     return SessionDetails.find({ npType: npType, npId: npId }).exec();
   }
 
