@@ -178,14 +178,14 @@ export class SessionDetailsService {
     }
   }
 
-  async getSessionsByNp(npType: string, npId: string): Promise<InstanceType<typeof SessionDetails>[]> {
-    if (!npType || !npId) {
-      throw new Error("npType and npId must be provided");
+  async getSessionsByNp(npType: string, npId: string,domain:string,version:string): Promise<InstanceType<typeof SessionDetails>[]> {
+    if (!npType || !npId || !domain || !version) {
+      throw new Error("npType,npId,domain and version must be provided");
     }
 
     try {
       logger.info(`Fetching SessionDetails for npType=${npType}, npId=${npId}`);
-      const sessions = await this.sessionRepo.findByNpTypeAndNpId(npType, npId);
+      const sessions = await this.sessionRepo.findByNpTypeAndNpId(npType, npId,domain,version);
       if (!sessions || sessions.length === 0) {
         logger.info(`No sessions found for npType=${npType}, npId=${npId}`);
         return [];
@@ -221,6 +221,8 @@ export class SessionDetailsService {
       npId?: string;
       domain?: string;
       version?: string;
+      usecaseId?: string;
+      flowMap?:string;
     }
   ) {
     try {

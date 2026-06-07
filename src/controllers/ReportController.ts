@@ -67,7 +67,6 @@ export const createReport = async (
       res.status(200).json(updatedReport);
       return;
     }
-    logger.info("data from pramaan=>>>>", JSON.stringify(data));
 
     // 3️⃣ Else → create
     const report = await reportService.createReport({

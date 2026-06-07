@@ -219,8 +219,7 @@ export const addFlowToSession = async (req: Request, res: Response): Promise<voi
   }
 }
 export const getSessionsByNp = async (req: Request, res: Response) => {
-  const np_type = req.query.np_type as string;
-  const np_id = req.query.np_id as string;
+  const {np_type,np_id,domain,version} = req.query;
 
   if (!np_type || !np_id) {
     logger.warning("Missing npType or npId in query params");
@@ -231,8 +230,10 @@ export const getSessionsByNp = async (req: Request, res: Response) => {
   try {
     logger.info(`Fetching sessions for np_type=${np_type}, np_id=${np_id}`);
     const sessions = await sessionDetailsService.getSessionsByNp(
-      np_type,
-      np_id
+      np_type as string,
+      np_id as string,
+      domain as string,
+      version as string
     );
 
     if (!sessions || sessions.length === 0) {
@@ -273,6 +274,9 @@ export const getSessionsByNp = async (req: Request, res: Response) => {
           sessionId,
           reportExists,
           createdAt,
+          domain: s.domain ?? null,
+          version: s.version ?? null,
+          usecaseId: s.usecaseId ?? null,
           userId: s.userId ?? null,
           flows: s.flows ?? [],
           flowSummary: s.flowSummary ?? null,
@@ -315,10 +319,10 @@ export const getSubscriberUrlsByUserId = async (req: Request, res: Response) => 
 /**
  * Upsert a session — create if not exists, update fields if it does
  * POST /api/sessions/upsert
- * Body: { sessionId, userId?, npType, npId?, domain?, version? }
+ * Body: { sessionId, userId?, npType, npId?, domain?, version?, usecaseId? }
  */
 export const upsertSession = async (req: Request, res: Response) => {
-  const { sessionId, userId, npType, npId, domain, version } = req.body;
+  const { sessionId, userId, npType, npId, domain, version, usecaseId,flowMap } = req.body;
 
   if (!sessionId || !npType) {
     res.status(400).json({ error: true, message: "sessionId and npType are required" });
@@ -333,6 +337,8 @@ export const upsertSession = async (req: Request, res: Response) => {
       npId,
       domain,
       version,
+      usecaseId,
+      flowMap
     });
 
     if (userId && sessionId) {

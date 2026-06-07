@@ -19,6 +19,7 @@ export interface ISessionDetails extends Document {
   version?: string | null;
   npId?: string | null;
   domain?: string | null;
+  usecaseId?: string | null;
   userId?: string | null;
   flows?: IFlow[];
   reportExists?: boolean;
@@ -47,6 +48,7 @@ const SessionDetailsSchema = new Schema<ISessionDetails>(
     version: { type: String },
     npId: { type: String },
     domain: { type: String },
+    usecaseId: { type: String },
     userId: { type: String },
     flows: [FlowSchema],
     reportExists: { type: Boolean, default: false },
