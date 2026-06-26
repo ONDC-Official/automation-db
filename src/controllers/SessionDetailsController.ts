@@ -1,7 +1,7 @@
 import { Request, Response } from "express";
 import { SessionDetailsRepository } from "../repositories/SessionDetailsRepository";
 import { PayloadRepository } from "../repositories/PayloadRepository";
-import logger from "../utils/logger";
+import logger from "@ondc/automation-logger";
 import { SessionDetailsService } from "../services/SessionDetailsService";
 import { SessionDetails } from "../entity/SessionDetails";
 import { UserService } from "../services/UserService";
@@ -14,7 +14,7 @@ const sessionRepo = new SessionDetailsRepository();
 const payloadRepo = new PayloadRepository();
 const userRepo = new UserRepository()
 const reportRepo = new ReportRepository();
-const reportService = new ReportService(reportRepo); 
+const reportService = new ReportService(reportRepo);
 const sessionDetailsService = new SessionDetailsService(
   sessionRepo,
   payloadRepo
@@ -46,7 +46,7 @@ export const getSessionById = async (req: Request, res: Response) => {
     if (session) {
       res.json(session);
     } else {
-      logger.warn(`Session not found with ID: ${sessionId}`);
+      logger.warning(`Session not found with ID: ${sessionId}`);
       res.status(404).send("Session not found");
     }
   } catch (error) {
@@ -81,7 +81,7 @@ export const createSession = async (req: Request, res: Response) => {
       sessionData
     );
 
-    if(sessionData?.userId && sessionData?.sessionId) {
+    if (sessionData?.userId && sessionData?.sessionId) {
       await userService.addSessionToUser(sessionData?.userId, sessionData?.sessionId)
     }
 
@@ -165,7 +165,7 @@ export const getPayloadBySessionId = async (req: Request, res: Response) => {
 /**
  * Update flow status in a session
  */
- export const updateFlow = async (req: Request, res: Response): Promise<void> => {
+export const updateFlow = async (req: Request, res: Response): Promise<void> => {
   const { sessionId } = req.params;
   const { flow } = req.body;
 
@@ -199,8 +199,8 @@ export const addFlowToSession = async (req: Request, res: Response): Promise<voi
   const { id, status, payloads } = req.body;
 
   if (!id || !status) {
-     res.status(400).send("Flow id and status are required");
-     return
+    res.status(400).send("Flow id and status are required");
+    return
   }
 
   try {
@@ -208,8 +208,8 @@ export const addFlowToSession = async (req: Request, res: Response): Promise<voi
     const updatedSession = await sessionDetailsService.addFlowToSession(sessionId, { id, status, payloads });
 
     if (!updatedSession) {
-       res.status(400).send("Session not found");
-       return
+      res.status(400).send("Session not found");
+      return
     }
 
     res.json(updatedSession);
@@ -219,11 +219,10 @@ export const addFlowToSession = async (req: Request, res: Response): Promise<voi
   }
 }
 export const getSessionsByNp = async (req: Request, res: Response) => {
-  const np_type = req.query.np_type as string;
-  const np_id = req.query.np_id as string;
+  const {np_type,np_id,domain,version} = req.query;
 
   if (!np_type || !np_id) {
-    logger.warn("Missing npType or npId in query params");
+    logger.warning("Missing npType or npId in query params");
     res.status(400).send("Missing npType or npId query parameters");
     return;
   }
@@ -231,8 +230,10 @@ export const getSessionsByNp = async (req: Request, res: Response) => {
   try {
     logger.info(`Fetching sessions for np_type=${np_type}, np_id=${np_id}`);
     const sessions = await sessionDetailsService.getSessionsByNp(
-      np_type,
-      np_id
+      np_type as string,
+      np_id as string,
+      domain as string,
+      version as string
     );
 
     if (!sessions || sessions.length === 0) {
@@ -250,8 +251,8 @@ export const getSessionsByNp = async (req: Request, res: Response) => {
           s.createdAt instanceof Date
             ? s.createdAt.toISOString()
             : typeof s.createdAt === "string"
-            ? new Date(s.createdAt).toISOString()
-            : null;
+              ? new Date(s.createdAt).toISOString()
+              : null;
 
         const prefixedTestId = `PW_${sessionId}`;
 
@@ -273,6 +274,13 @@ export const getSessionsByNp = async (req: Request, res: Response) => {
           sessionId,
           reportExists,
           createdAt,
+          domain: s.domain ?? null,
+          version: s.version ?? null,
+          usecaseId: s.usecaseId ?? null,
+          userId: s.userId ?? null,
+          flows: s.flows ?? [],
+          flowSummary: s.flowSummary ?? null,
+          flowMap: s.flowMap ?? null,
         };
       })
     );
@@ -284,5 +292,92 @@ export const getSessionsByNp = async (req: Request, res: Response) => {
       error
     );
     res.status(500).send(error.message || "Error retrieving session IDs");
+  }
+};
+
+/**
+ * Get all distinct subscriber URLs (npId) for a given userId
+ */
+export const getSubscriberUrlsByUserId = async (req: Request, res: Response) => {
+  const { userId } = req.params;
+
+  if (!userId) {
+    res.status(400).send("userId is required");
+    return;
+  }
+
+  try {
+    logger.info(`Fetching subscriber URLs for userId=${userId}`);
+    const subscriberUrls = await sessionDetailsService.getSubscriberUrlsByUserId(userId);
+    res.json({ subscriberUrls });
+  } catch (error: any) {
+    logger.error(`Error fetching subscriber URLs for userId=${userId}`, error);
+    res.status(500).send(error.message || "Error retrieving subscriber URLs");
+  }
+};
+
+/**
+ * Upsert a session — create if not exists, update fields if it does
+ * POST /api/sessions/upsert
+ * Body: { sessionId, userId?, npType, npId?, domain?, version?, usecaseId? }
+ */
+export const upsertSession = async (req: Request, res: Response) => {
+  const { sessionId, userId, npType, npId, domain, version, usecaseId,flowMap } = req.body;
+
+  if (!sessionId || !npType) {
+    res.status(400).json({ error: true, message: "sessionId and npType are required" });
+    return;
+  }
+
+  try {
+    logger.info(`Upserting session: ${sessionId}`);
+    const result = await sessionDetailsService.upsertSession(sessionId, {
+      userId,
+      npType,
+      npId,
+      domain,
+      version,
+      usecaseId,
+      flowMap
+    });
+
+    if (userId && sessionId) {
+      userService.addSessionToUser(userId, sessionId).catch((err) =>
+        logger.error(`Failed to link session ${sessionId} to user ${userId}`, err)
+      );
+    }
+
+    res.status(200).json(result);
+  } catch (error: any) {
+    logger.error(`Error upserting session ${sessionId}`, error);
+    res.status(500).json({ error: true, message: error.message || "Error upserting session" });
+  }
+};
+
+/**
+ * Save flow_summary and flowMap (pass/fail per flow) after report generation
+ * POST /api/sessions/:sessionId/analytics
+ * Body: { flowSummary: {...}, flowMap: { flowId: "PASS"|"FAIL" } }
+ */
+export const saveSessionAnalytics = async (req: Request, res: Response) => {
+  const { sessionId } = req.params;
+  const { flowSummary, flowMap } = req.body;
+
+  if (!sessionId) {
+    res.status(400).json({ error: true, message: "sessionId is required" });
+    return;
+  }
+  if (!flowSummary || !flowMap) {
+    res.status(400).json({ error: true, message: "flowSummary and flowMap are required" });
+    return;
+  }
+
+  try {
+    logger.info(`Saving analytics for sessionId=${sessionId}`);
+    await sessionDetailsService.saveSessionAnalytics(sessionId, flowSummary, flowMap);
+    res.json({ success: true, message: "Analytics saved" });
+  } catch (error: any) {
+    logger.error(`Error saving analytics for sessionId=${sessionId}`, error);
+    res.status(500).json({ error: true, message: error.message || "Error saving analytics" });
   }
 };

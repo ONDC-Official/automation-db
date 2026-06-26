@@ -1,4 +1,5 @@
 import { SessionDetails, ISessionDetails } from "../entity/SessionDetails";
+import { UserModel } from "../entity/User";
 
 export class SessionDetailsRepository {
   // Find SessionDetails by sessionId
@@ -30,7 +31,7 @@ export class SessionDetailsRepository {
     return SessionDetails.findOneAndUpdate(
       { sessionId: sessionId },
       updateData,
-      { new: true }
+      { new: true },
     ).exec();
   }
 
@@ -54,31 +55,36 @@ export class SessionDetailsRepository {
   // -------------------------
 
   // Add a new flow to a session
-  async addFlowToSession(sessionId: string, flow: { id: string; status: string; payloads?: string[] }) {
+  async addFlowToSession(
+    sessionId: string,
+    flow: { id: string; status: string; payloads?: string[] },
+  ) {
     // 1️⃣ Check if session exists
     const session = await SessionDetails.findOne({ sessionId }).exec();
     if (!session) {
       throw new Error(`Session with ID ${sessionId} not found`);
     }
-  
+
     // 2️⃣ Check if flow already exists in that session
     const existingFlow = session.flows?.find((f: any) => f.id === flow.id);
     if (existingFlow) {
-      return existingFlow
+      return existingFlow;
     }
-  
+
     // 3️⃣ Atomically push flow (avoids race conditions if many writes happen)
     const updated = await SessionDetails.findOneAndUpdate(
       { sessionId, "flows.id": { $ne: flow.id } }, // ensure flow.id not present
       { $push: { flows: flow } },
-      { new: true }
+      { new: true },
     ).exec();
-  
+
     // 4️⃣ Handle unexpected null (edge race case)
     if (!updated) {
-      throw new Error(`Failed to add flow — it may have been added concurrently`);
+      throw new Error(
+        `Failed to add flow — it may have been added concurrently`,
+      );
     }
-  
+
     return updated;
   }
 
@@ -86,17 +92,19 @@ export class SessionDetailsRepository {
   async updateFlowInSession(
     sessionId: string,
     flowId: string,
-    updateData: Partial<{ status: string; payloads: string[] }>
+    updateData: Partial<{ status: string; payloads: string[] }>,
   ) {
     return SessionDetails.findOneAndUpdate(
       { sessionId, "flows.id": flowId },
       {
         $set: {
           ...(updateData.status && { "flows.$.status": updateData.status }),
-          ...(updateData.payloads && { "flows.$.payloads": updateData.payloads }),
+          ...(updateData.payloads && {
+            "flows.$.payloads": updateData.payloads,
+          }),
         },
       },
-      { new: true }
+      { new: true },
     ).exec();
   }
 
@@ -105,11 +113,88 @@ export class SessionDetailsRepository {
     return SessionDetails.findOneAndUpdate(
       { sessionId },
       { $pull: { flows: { id: flowId } } },
-      { new: true }
+      { new: true },
     ).exec();
   }
 
-  async findByNpTypeAndNpId(npType: string, npId: string) {
-  return SessionDetails.find({ npType: npType, npId: npId }).exec();
-}
+  async findByNpTypeAndNpId(npType: string, npId: string,domain:string,version:string) {
+    //need to filter by domain and version also in future
+    return SessionDetails.find({ npType: npType, npId: npId,domain,version }).exec();
+  }
+
+  // Get all distinct npId (subscriber URLs) for a given userId (githubId)
+  async findDistinctNpIdsByUserId(userId: string): Promise<string[]> {
+    // Step 1: Find the user and get their sessionIds
+    // const user = await UserModel.findOne({ userId: userId }).exec();
+    // if (!user || !user.sessionIds || user.sessionIds.length === 0) {
+    //   return [];
+    // }
+
+    // Step 2: Get distinct npId values from those sessions
+    const results = await SessionDetails.distinct("npId", {
+      userId,
+      npId: { $ne: null, $exists: true },
+    }).exec();
+
+    return results.filter(Boolean) as string[];
+  }
+
+  // Upsert a session — creates it if not found, updates fields if it exists
+  async upsertSession(
+    sessionId: string,
+    data: {
+      userId?: string;
+      npType: string;
+      npId?: string;
+      domain?: string;
+      version?: string;
+      usecaseId?: string;
+      flowMap?: any;
+    },
+  ) {
+    const sessionDetail: any = await SessionDetails.findOne({
+      sessionId: sessionId,
+    }).exec();
+
+    const updatedFlowMap = {
+      ...data.flowMap, // new keys
+      ...(sessionDetail?.flowMap || {}), // existing keys override
+    };
+    data.flowMap = updatedFlowMap;
+    return SessionDetails.findOneAndUpdate(
+      { sessionId },
+      {
+        $setOnInsert: { sessionId, sessionType: "AUTOMATION" },
+        $set: data,
+      },
+      { upsert: true, new: true },
+    ).exec();
+  }
+
+  // Save flowSummary and flowMap (pass/fail per flow) after report generation
+  async saveSessionAnalytics(
+    sessionId: string,
+    flowSummary: Record<string, { total: number; completed: number }>,
+    flowMap: Record<string, "PASS" | "FAIL">,
+  ) {
+    const sessionDetail: any = await SessionDetails.findOne({
+      sessionId: sessionId,
+    }).exec();
+
+    const updatedFlowMap = {
+      ...(sessionDetail?.flowMap || {}),
+      ...flowMap,
+    };
+    return SessionDetails.findOneAndUpdate(
+      { sessionId },
+      {
+        $set: {
+          flowSummary,
+          flowMap: updatedFlowMap,
+          reportExists: true,
+        },
+      },
+      { new: true },
+    ).exec();
+  }
 }

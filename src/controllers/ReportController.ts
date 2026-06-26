@@ -1,8 +1,13 @@
 import { Request, Response } from "express";
 import { ReportService } from "../services/ReportService";
 import { ReportRepository } from "../repositories/ReportRepository";
-import logger from "../utils/logger";
+import path from "path";
+import fsPromise from "fs/promises";
+import generator from "mochawesome-report-generator";
+import logger from "@ondc/automation-logger";
 
+
+const reportDir = path.resolve(__dirname, "../output");
 const reportService = new ReportService(new ReportRepository());
 
 export const createReport = async (
@@ -10,48 +15,74 @@ export const createReport = async (
   res: Response
 ): Promise<void> => {
   const { testId } = req.params;
-  const { data } = req.body;
-
+  const userId = req.query?.userId as string | undefined;
+  const { data, flow_summary, total_tests: bodyTotalTests, passed_tests: bodyPassedTests } = req.body;
   if (!data) {
     res.status(400).json({ error: "Missing 'data' in request body" });
     return;
   }
-
   try {
-  logger.info(`Received report for testId: ${testId}`);
+    logger.info(`Received report for testId: ${testId},flow_summary:${JSON.stringify(flow_summary)}, data:${JSON.stringify(req.body)}`);
 
-  // 1️⃣ Check if report exists
-  const exists = await reportService.hasReportForTestId(testId);
+    // Own service sends pre-rendered HTML as a data URI; Pramaan sends mochawesome JSON.
+    // Skip generator.create() when the report is already rendered.
+    const isPreRenderedHTML = typeof data === "string" && data.startsWith("data:text/html;base64,");
 
-  // 2️⃣ If exists → update
-  if (exists) {
-    const meta = await reportService.getReportMetaByTestId(testId);
+    let base64Report: string;
+    if (isPreRenderedHTML) {
+      base64Report = data;
+    } else {
+      await generator.create(data, {
+        reportDir: reportDir,
+        reportTitle: `Pramaan Test Report ID: ${testId} generated at: ${JSON.stringify(
+          new Date(Date.now())
+        )}`,
+        reportPageTitle: `${testId}_report`,
+        reportFilename: `${testId}_report`,
+        overwrite: true,
+        inlineAssets: true,
+      });
+      const reportPath = path.join(reportDir, `${testId}_report.html`);
+      const reportContent = await fsPromise.readFile(reportPath, "utf-8");
+      base64Report = `data:text/html;base64,${Buffer.from(reportContent).toString("base64")}`;
+    }
 
-    if (!meta) {
-      res.status(500).json({ error: "Report metadata not found" });
+    // 1️⃣ Check if report exists
+    const exists = await reportService.hasReportForTestId(testId);
+
+    // 2️⃣ If exists → update
+    if (exists) {
+      const meta = await reportService.getReportMetaByTestId(testId);
+
+      if (!meta) {
+        res.status(500).json({ error: "Report metadata not found" });
+        return;
+      }
+
+      const updatedReport = await reportService.updateReport(
+        meta.id.toString(),
+        { data: base64Report, flow_summary }
+      );
+
+      res.status(200).json(updatedReport);
       return;
     }
 
-    const updatedReport = await reportService.updateReport(
-      meta.id.toString(),
-      { data }
-    );
+    // 3️⃣ Else → create
+    const report = await reportService.createReport({
+      test_id: testId,
+      data: base64Report,
+      ...(userId && { user_id: userId }),
+      total_tests: isPreRenderedHTML ? bodyTotalTests : data?.stats?.tests,
+      passed_tests: isPreRenderedHTML ? bodyPassedTests : data?.stats?.passes,
+      ...(flow_summary && { flow_summary }),
+    });
 
-    res.status(200).json(updatedReport);
-    return;
+    res.status(201).json(report);
+  } catch (error) {
+    logger.error("Error creating/updating report", error);
+    res.status(500).json({ error: "Failed to create/update report" });
   }
-
-  // 3️⃣ Else → create
-  const report = await reportService.createReport({
-    test_id: testId,
-    data,
-  });
-
-  res.status(201).json(report);
-} catch (error) {
-  logger.error("Error creating/updating report", error);
-  res.status(500).json({ error: "Failed to create/update report" });
-}
 };
 
 export const getAllReports = async (req: Request, res: Response): Promise<void> => {
@@ -77,5 +108,26 @@ export const getReportByTestId = async (req: Request, res: Response): Promise<vo
   } catch (error) {
     logger.error("Error fetching report", error);
     res.status(500).json({ error: "Failed to fetch report" });
+  }
+};
+
+export const getReportsByUserId = async (
+  req: Request,
+  res: Response
+): Promise<void> => {
+  const { userId } = req.params;
+
+  try {
+    const reports = await reportService.getReportsByUserId(userId);
+
+    if (!reports || reports.length === 0) {
+      res.status(404).json({ error: "No reports found for user" });
+      return;
+    }
+
+    res.json(reports);
+  } catch (error) {
+    logger.error("Error fetching reports by userId", error);
+    res.status(500).json({ error: "Failed to fetch reports" });
   }
 };

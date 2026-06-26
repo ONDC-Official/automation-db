@@ -14,7 +14,6 @@ const PayloadSchema = new Schema(
     jsonResponse: { type: Object }, // plain JSON object
     httpStatus: { type: Number },
     action_id: { type: String },
-
     sessionId: { type: String, required: true },
   },
   { timestamps: true }

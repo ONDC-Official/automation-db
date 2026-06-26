@@ -1,7 +1,7 @@
 import { Request, Response } from "express";
 import { PayloadRepository } from "../repositories/PayloadRepository";
 import { PayloadService } from "../services/PayloadService";
-import logger from "../utils/logger";
+import logger from "@ondc/automation-logger";
 
 // Initialize the repository and service
 const payloadRepo = new PayloadRepository();
@@ -56,7 +56,7 @@ export const getPayloadByPayloadIds = async (
 		const payloads = await payloadService.getPayloadByPayloadIds(payloadIds);
 
 		if (!payloads || payloads.length === 0) {
-			logger.warn(`No payloads found for payloadIds: ${payloadIds}`);
+			logger.warning(`No payloads found for payloadIds: ${payloadIds}`);
 			res.status(404).send("Payloads not found");
 			return; // stop further execution
 		}
@@ -100,7 +100,7 @@ export const updatePayload = async (
 		const updatedPayload = await payloadService.updatePayload(id, payloadData);
 
 		if (!updatedPayload) {
-			logger.warn(`Payload with ID: ${id} not found for update`);
+			logger.warning(`Payload with ID: ${id} not found for update`);
 			res.status(404).send("Payload not found");
 			return; // stop execution cleanly
 		}
@@ -142,7 +142,7 @@ export const getPayloadByTransactionId = async (
 		);
 
 		if (!payload) {
-			logger.warn(`Payload with transactionId: ${transactionId} not found`);
+			logger.warning(`Payload with transactionId: ${transactionId} not found`);
 			res.status(404).send("Payload not found for transactionId");
 			return; // stop execution
 		}
@@ -171,7 +171,7 @@ export const getPayloadsByTransactionId = async (
 		if (payload) {
 			res.json(payload); // Return the payload details if found
 		} else {
-			logger.warn(`Payload with transactionId: ${transactionId} not found`); // Log warning if not found
+			logger.warning(`Payload with transactionId: ${transactionId} not found`); // Log warning if not found
 			res.status(404).send("Payload not found for transactionId"); // Send not found response
 		}
 	} catch (error) {

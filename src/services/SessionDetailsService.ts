@@ -3,7 +3,7 @@ import { PayloadRepository } from "../repositories/PayloadRepository";
 import { SessionDetails } from "../entity/SessionDetails";
 import { Payload } from "../entity/Payload";
 import { PayloadDetailsDTO } from "../entity/PayloadDetailsDTO";
-import logger from "../utils/logger";
+import logger from "@ondc/automation-logger";
 
 // Define a type for session + populated payloads
 type SessionWithPayloads = InstanceType<typeof SessionDetails> & {
@@ -60,45 +60,43 @@ export class SessionDetailsService {
   }
 
   async getPayloadDetails(sessionId: string): Promise<PayloadDetailsDTO[]> {
-  if (!sessionId) throw new Error("Session ID cannot be undefined");
+    if (!sessionId) throw new Error("Session ID cannot be undefined");
 
-  try {
-    logger.info(`Fetching payload details for session ID: ${sessionId}`);
+    try {
+      logger.info(`Fetching payload details for session ID: ${sessionId}`);
 
-    // 1️⃣ Fetch session details
-    const session = await this.sessionRepo.findBySessionId(sessionId);
-    if (!session) {
-      logger.warn(`SessionDetails not found for sessionId: ${sessionId}`);
-      throw new Error(`SessionDetails not found for sessionId: ${sessionId}`);
+      // 1️⃣ Fetch session details
+      const session = await this.sessionRepo.findBySessionId(sessionId);
+      if (!session) {
+        logger.warning(`SessionDetails not found for sessionId: ${sessionId}`);
+        throw new Error(`SessionDetails not found for sessionId: ${sessionId}`);
+      }
+
+      // 2️⃣ Fetch payloads linked to this session ID
+      const payloads = await this.payloadRepo.findBySessionId(sessionId);
+      if (!payloads || payloads.length === 0) {
+        logger.warning(`No payloads found for sessionId: ${sessionId}`);
+        return [];
+      }
+
+      // 3️⃣ Map payloads into DTOs
+      const domain = session.domain ?? "defaultDomain";
+
+      const payloadDetails = payloads.map(
+        (payload: InstanceType<typeof Payload>) =>
+          new PayloadDetailsDTO(session.npType, domain, payload)
+      );
+
+      logger.info(
+        `Fetched ${payloadDetails.length} payload(s) for sessionId: ${sessionId}`
+      );
+
+      return payloadDetails;
+    } catch (error) {
+      logger.error(`Error retrieving payload details for sessionId: ${sessionId}`, error);
+      throw new Error("Error retrieving payload details");
     }
-
-    // 2️⃣ Fetch payloads linked to this session ID
-    const payloads = await this.payloadRepo.findBySessionId(sessionId);
-    if (!payloads || payloads.length === 0) {
-      logger.warn(`No payloads found for sessionId: ${sessionId}`);
-      return [];
-    }
-
-    // 3️⃣ Map payloads into DTOs
-    const domain = session.domain ?? "defaultDomain";
-
-    const payloadDetails = payloads.map(
-      (payload: InstanceType<typeof Payload>) =>
-        new PayloadDetailsDTO(session.npType, domain, payload)
-    );
-
-    logger.info(
-      `Fetched ${payloadDetails.length} payload(s) for sessionId: ${sessionId}`
-    );
-
-    return payloadDetails;
-  } catch (error) {
-    logger.error(`Error retrieving payload details for sessionId: ${sessionId}`, error);
-    throw new Error("Error retrieving payload details");
   }
-}
-
-  // -------------------- New Methods --------------------
 
   async createSession(sessionData: Partial<InstanceType<typeof SessionDetails>>): Promise<InstanceType<typeof SessionDetails>> {
     try {
@@ -117,7 +115,7 @@ export class SessionDetailsService {
       logger.info(`Updating session with ID: ${sessionId}`, { updatedData });
       const updated = await this.sessionRepo.update(sessionId, updatedData);
       if (!updated) {
-        logger.warn(`Session with ID: ${sessionId} not found for update`);
+        logger.warning(`Session with ID: ${sessionId} not found for update`);
         throw new Error(`Session not found with ID: ${sessionId}`);
       }
       logger.info(`Session with ID: ${sessionId} updated successfully`);
@@ -139,7 +137,7 @@ export class SessionDetailsService {
     }
   }
 
- // -------------------- Flow Management --------------------
+  // -------------------- Flow Management --------------------
 
   async addFlowToSession(sessionId: string, flow: { id: string; status: string; payloads?: string[] }) {
     try {
@@ -180,14 +178,14 @@ export class SessionDetailsService {
     }
   }
 
-  async getSessionsByNp(npType: string, npId: string): Promise<InstanceType<typeof SessionDetails>[]> {
-    if (!npType || !npId) {
-      throw new Error("npType and npId must be provided");
+  async getSessionsByNp(npType: string, npId: string,domain:string,version:string): Promise<InstanceType<typeof SessionDetails>[]> {
+    if (!npType || !npId || !domain || !version) {
+      throw new Error("npType,npId,domain and version must be provided");
     }
 
     try {
       logger.info(`Fetching SessionDetails for npType=${npType}, npId=${npId}`);
-      const sessions = await this.sessionRepo.findByNpTypeAndNpId(npType, npId);
+      const sessions = await this.sessionRepo.findByNpTypeAndNpId(npType, npId,domain,version);
       if (!sessions || sessions.length === 0) {
         logger.info(`No sessions found for npType=${npType}, npId=${npId}`);
         return [];
@@ -196,6 +194,61 @@ export class SessionDetailsService {
     } catch (error) {
       logger.error(`Error fetching SessionDetails for npType=${npType}, npId=${npId}`, error);
       throw new Error("Error retrieving sessions by npType and npId");
+    }
+  }
+
+  async getSubscriberUrlsByUserId(userId: string): Promise<string[]> {
+
+    if (!userId) {
+      throw new Error("userId must be provided");
+    }
+    try {
+      logger.info(`Fetching distinct subscriber URLs (npId) for userId=${userId}`);
+      const urls = await this.sessionRepo.findDistinctNpIdsByUserId(userId);
+      logger.info(`Found ${urls.length} subscriber URL(s) for userId=${userId}`);
+      return urls;
+    } catch (error) {
+      logger.error(`Error fetching subscriber URLs for userId=${userId}`, error);
+      throw new Error("Error retrieving subscriber URLs by userId");
+    }
+  }
+
+  async upsertSession(
+    sessionId: string,
+    data: {
+      userId?: string;
+      npType: string;
+      npId?: string;
+      domain?: string;
+      version?: string;
+      usecaseId?: string;
+      flowMap?:string;
+    }
+  ) {
+    try {
+      logger.info(`Upserting session with ID: ${sessionId}`, { data });
+      const result = await this.sessionRepo.upsertSession(sessionId, data);
+      logger.info(`Session upserted successfully: ${sessionId}`);
+      return result;
+    } catch (error) {
+      logger.error(`Error upserting session ${sessionId}`, error);
+      throw new Error("Error upserting session");
+    }
+  }
+
+  async saveSessionAnalytics(
+    sessionId: string,
+    flowSummary: Record<string, { total: number; completed: number }>,
+    flowMap: Record<string, "PASS" | "FAIL">
+  ): Promise<void> {
+    if (!sessionId) throw new Error("sessionId must be provided");
+    try {
+      logger.info(`Saving analytics for session=${sessionId}`);
+      await this.sessionRepo.saveSessionAnalytics(sessionId, flowSummary, flowMap);
+      logger.info(`Analytics saved for session=${sessionId}`);
+    } catch (error) {
+      logger.error(`Error saving analytics for session=${sessionId}`, error);
+      throw new Error("Error saving session analytics");
     }
   }
 }
