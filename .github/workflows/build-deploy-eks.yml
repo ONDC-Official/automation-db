@@ -4,7 +4,9 @@ on:
   push:
     branches:
       - main
-      - 'release-staging*'
+      - draft-*
+      - release-staging
+      - release-*
 
 permissions:
   packages: write
@@ -37,7 +39,7 @@ jobs:
           SEMVER=$(node -p "require('./package.json').version")
           SHORT_SHA=$(git rev-parse --short=7 HEAD)
 
-          if [[ "${{ github.ref_name }}" == release-staging* ]]; then
+          if [[ "${{ github.ref_name }}" == release-* ]]; then
             ENV_PREFIX="staging"
             echo "ENVIRONMENT=staging" >> $GITHUB_ENV
             echo "TARGET_FILE=k8/aws/helm/service-layer/values-staging.yaml" >> $GITHUB_ENV
@@ -56,7 +58,7 @@ jobs:
             echo 'IMAGE_TAGS<<EOF'
             echo "ghcr.io/${REPO_LOWER}:${IMAGE_TAG}"
 
-            if [[ "${{ github.ref_name }}" == release-staging* ]]; then
+            if [[ "${{ github.ref_name }}" == release-* ]]; then
               echo "ghcr.io/${REPO_LOWER}:latest"
             fi
 
