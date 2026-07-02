@@ -10,9 +10,10 @@ const router = Router();
 
 router.get("/health", (_req, res) => {
     if (mongoose.connection.readyState === 1) {
-        return res.json({ status: "ok" });
+        res.json({ status: "ok" });
+    } else {
+        res.status(503).json({ status: "degraded", checks: { mongo: "fail" } });
     }
-    return res.status(503).json({ status: "degraded", checks: { mongo: "fail" } });
 });
 
 // Apply API key middleware
