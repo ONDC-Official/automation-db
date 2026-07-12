@@ -160,6 +160,8 @@ jobs:
                   echo "API_SERVICE_KEY=${{ secrets.API_SERVICE_KEY }}" >> \$REPO_DIR/.env
                   echo "MONGO_URI=${{ secrets.MONGO_URI }}" >> \$REPO_DIR/.env
                   echo "NODE_ENV=production" >> \$REPO_DIR/.env
+                  echo "LOKI_HOST=${{ vars.LOKI_HOST }}" >> \$REPO_DIR/.env
+
                   EOF
 
             - name: Verify .env and docker-compose.yml files
