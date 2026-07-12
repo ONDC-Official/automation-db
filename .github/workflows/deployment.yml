@@ -62,7 +62,7 @@ jobs:
                   echo "NODE_ENV=${{ vars.NODE_ENV }}" >> \$REPO_DIR/.env
                   echo "MONGO_URI=${{ vars.MONGO_URI }}" >> \$REPO_DIR/.env
                   echo "NODE_ENV=production" >> \$REPO_DIR/.env
-
+                  echo "LOKI_HOST=${{ vars.LOKI_HOST }}" >> \$REPO_DIR/.env
                   EOF
 
             - name: Verify .env and docker-compose.yml files
