@@ -11,6 +11,52 @@ import yaml from "yaml";
 import { z } from "zod";
 import { getDb } from "../utils/mongoClient";
 
+export interface UsecaseStatus {
+    usecase: string;
+    status: string;
+}
+
+/** Normalize a usecase label for matching (case- and separator-insensitive). */
+const normalizeUsecase = (value: unknown): string =>
+    String(value ?? "")
+        .trim()
+        .toUpperCase()
+        .replace(/[_\s]+/g, " ");
+
+/**
+ * Extract `info.x-status` from a raw parsed build.yaml and align each entry's
+ * usecase to the canonical `info.x-usecases` label where possible. Accepts the
+ * authored shape `[{ use_case, status }]` (also tolerates `usecase`), and is
+ * separator/case-insensitive so `BUSINESS_LOAN` matches `BUSINESS LOAN`.
+ */
+function extractUsecaseStatus(parsed: unknown): UsecaseStatus[] {
+    const info = (parsed as { info?: Record<string, unknown> })?.info;
+    const rawStatus = info?.["x-status"];
+    if (!Array.isArray(rawStatus)) return [];
+
+    const usecases = Array.isArray(info?.["x-usecases"])
+        ? (info?.["x-usecases"] as unknown[]).map((u) => String(u))
+        : [];
+
+    return rawStatus
+        .filter(
+            (e): e is Record<string, unknown> =>
+                !!e &&
+                typeof e === "object" &&
+                ((e as Record<string, unknown>).use_case != null ||
+                    (e as Record<string, unknown>).usecase != null) &&
+                (e as Record<string, unknown>).status != null,
+        )
+        .map((e) => {
+            const raw = String(e.use_case ?? e.usecase);
+            const canonical =
+                usecases.find(
+                    (u) => normalizeUsecase(u) === normalizeUsecase(raw),
+                ) ?? raw;
+            return { usecase: canonical, status: String(e.status) };
+        });
+}
+
 export interface SpecsQuery {
     domain: string;
     version: string;
@@ -42,7 +88,24 @@ export class ProtocolService {
         }
 
         const db = getDb();
-        return ingestBuild(db, result.data);
+        const ingestResult = await ingestBuild(db, result.data);
+
+        // `x-status` carries per-usecase lifecycle status. It is an unknown key to
+        // BuildConfig (stripped by zod) and does not affect the build hash, so a
+        // status-only change would be "skipped" by ingestBuild. Read it from the
+        // raw parsed doc and persist it onto build_meta unconditionally.
+        const usecaseStatus = extractUsecaseStatus(parsed);
+        await db
+            .collection(COLLECTIONS.META)
+            .updateOne(
+                {
+                    domain: ingestResult.domain,
+                    version: ingestResult.version,
+                },
+                { $set: { usecaseStatus } },
+            );
+
+        return ingestResult;
     }
 
     async ingestValidationTable(
@@ -201,16 +264,32 @@ export class ProtocolService {
             .collection(COLLECTIONS.META)
             .find(
                 {},
-                { projection: { _id: 0, domain: 1, version: 1, usecases: 1 } },
+                {
+                    projection: {
+                        _id: 0,
+                        domain: 1,
+                        version: 1,
+                        usecases: 1,
+                        usecaseStatus: 1,
+                    },
+                },
             )
             .toArray();
 
         // Group by domain, collect versions with their usecases
-        const map = new Map<string, { key: string; usecase: string[] }[]>();
+        const map = new Map<
+            string,
+            {
+                key: string;
+                usecase: string[];
+                usecaseStatus: UsecaseStatus[];
+            }[]
+        >();
         for (const doc of docs) {
             const entry = {
                 key: doc.version as string,
                 usecase: (doc.usecases ?? []) as string[],
+                usecaseStatus: (doc.usecaseStatus ?? []) as UsecaseStatus[],
             };
             const existing = map.get(doc.domain as string);
             if (existing) {
