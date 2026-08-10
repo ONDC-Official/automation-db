@@ -15,11 +15,21 @@ import {
   getSubscriberUrlsByUserId,
   saveSessionAnalytics,
   upsertSession,
+  getSessionStats,
+  getSessionFacets,
+  exportSessions,
+  getParticipants,
+  getParticipantDetail,
 } from "../controllers/SessionDetailsController";
 
 const router = Router();
 
 // ⚠️ Specific routes MUST come before wildcard /:sessionId
+router.get("/stats", getSessionStats);
+router.get("/facets", getSessionFacets);
+router.get("/export", exportSessions);
+router.get("/participants", getParticipants);
+router.get("/participants/:host", getParticipantDetail);
 router.get("/filter", getSessionsByNp);
 router.get("/subscriber-urls/:userId", getSubscriberUrlsByUserId);
 router.get("/check/:sessionId", checkSessionById);

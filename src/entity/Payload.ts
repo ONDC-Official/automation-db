@@ -22,4 +22,12 @@ const PayloadSchema = new Schema(
 // Index for faster queries by session
 PayloadSchema.index({ sessionId: 1 });
 
+/**
+ * The participants rollup looks payloads up per session and reduces them to a
+ * min(createdAt) plus a set of flowIds. Carrying createdAt in the index keeps
+ * that sub-pipeline off the documents themselves, which hold full request and
+ * response bodies.
+ */
+PayloadSchema.index({ sessionId: 1, createdAt: 1, flowId: 1 });
+
 export const Payload = model("Payload", PayloadSchema);

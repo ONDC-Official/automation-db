@@ -1,6 +1,10 @@
 import logger from "@ondc/automation-logger";
-import { ReportRepository } from "../repositories/ReportRepository";
+import {
+  ReportRepository,
+  PaginatedReports,
+} from "../repositories/ReportRepository";
 import { IReport } from "../entity/Reports";
+import { ParsedReportQuery } from "../utils/reportFilters";
 import mongoose from "mongoose";
 
 export class ReportService {
@@ -13,6 +17,19 @@ export class ReportService {
       return await this.reportRepo.findAll();
     } catch (err) {
       logger.error("Error fetching all reports", err);
+      throw err;
+    }
+  }
+
+  /** Filtered, paginated reports joined to their session. */
+  async getPaginatedReports(
+    parsed: ParsedReportQuery,
+  ): Promise<PaginatedReports> {
+    logger.info("Fetching paginated reports", { match: parsed.match });
+    try {
+      return await this.reportRepo.findPaginated(parsed);
+    } catch (err) {
+      logger.error("Error fetching paginated reports", err);
       throw err;
     }
   }

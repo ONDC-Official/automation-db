@@ -1,7 +1,670 @@
+import { PipelineStage } from "mongoose";
 import { SessionDetails, ISessionDetails } from "../entity/SessionDetails";
 import { UserModel } from "../entity/User";
+import {
+  buildSessionPipeline,
+  ParsedSessionQuery,
+} from "../utils/sessionFilters";
+import {
+  EXCLUDED_HOSTS,
+  hostExpr,
+  ParsedNpQuery,
+} from "../utils/npFilters";
+
+export interface PaginatedSessions {
+  data: unknown[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+}
+
+/**
+ * One Network Participant, keyed by the host of its subscriber URL.
+ *
+ * The three flow figures are all *distinct flow identities*, never per-session
+ * totals — mixing the two makes "judged" exceed "attempted" for any participant
+ * that ran the same flow in several sessions.
+ */
+export interface ParticipantRow {
+  host: string;
+  /** A host may have acted as both sides across sessions. */
+  npTypes: string[];
+  /** The raw subscriber URLs that collapsed into this host. */
+  npIds: string[];
+  domains: string[];
+  versions: string[];
+  /** Distinct sessionIds — session documents are not unique on sessionId. */
+  sessions: number;
+  firstSessionAt: Date | null;
+  lastSessionAt: Date | null;
+  firstPayloadAt: Date | null;
+  /** Distinct flowIds seen on this participant's payloads. */
+  flowsAttempted: number;
+  /** Distinct flowIds carrying a verdict in flowMap. */
+  flowsJudged: number;
+  /** Distinct flowIds that passed at least once. */
+  flowsPassed: number;
+  passRate: number | null;
+}
+
+export interface PaginatedParticipants {
+  data: ParticipantRow[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+}
+
+export interface ParticipantDetail extends ParticipantRow {
+  recentSessions: Array<{
+    sessionId: string;
+    npType: string | null;
+    domain: string | null;
+    version: string | null;
+    createdAt: Date | null;
+    reportExists: boolean;
+    flowsJudged: number;
+    flowsPassed: number;
+  }>;
+  /** Per-flow rollup across every session this participant ran. */
+  flows: Array<{ flowId: string; passed: number; failed: number }>;
+}
+
+export interface StatsTotals {
+  sessions: number;
+  withReports: number;
+  flowsTotal: number;
+  flowsCompleted: number;
+  flowsPassed: number;
+  flowsFailed: number;
+  /** Share of judged flows that passed, 0–1. Null when nothing is judged. */
+  passRate: number | null;
+}
+
+export interface StatsBucket {
+  sessions: number;
+  flowsPassed: number;
+  flowsFailed: number;
+  passRate: number | null;
+}
+
+export interface SessionStats {
+  totals: StatsTotals;
+  byDay: Array<{ date: string; sessions: number; passed: number; failed: number }>;
+  byDomain: Array<StatsBucket & { domain: string | null }>;
+  byNpType: Array<StatsBucket & { npType: string | null }>;
+  byVersion: Array<StatsBucket & { version: string | null }>;
+}
+
+export interface SessionFacets {
+  domains: string[];
+  versions: string[];
+  npTypes: string[];
+  sessionTypes: string[];
+  usecaseIds: string[];
+}
+
+/** Judged-flow pass share, consistent with the per-session passRate. */
+const passRateOf = (passed: number, failed: number): number | null =>
+  passed + failed > 0 ? passed / (passed + failed) : null;
+
+/**
+ * A participant's pass share: distinct flows that ever passed, over distinct
+ * flows that were judged at all. Null — never 0 — when nothing is judged, so
+ * "no report yet" stays distinguishable from "everything failed".
+ *
+ * Unlike the session breakdowns, this one is computed in the pipeline rather
+ * than in JS: it is a sortable column, so it has to exist before $sort/$skip or
+ * paging would order on a field the database cannot see.
+ */
+const PARTICIPANT_PASS_RATE: Record<string, unknown> = {
+  $cond: [
+    { $gt: ["$flowsJudged", 0] },
+    { $divide: ["$flowsPassed", "$flowsJudged"] },
+    null,
+  ],
+};
+
+/** Flattens an array-of-arrays into one distinct set, inside the pipeline. */
+const distinctUnion = (field: string): Record<string, unknown> => ({
+  $reduce: {
+    input: { $ifNull: [field, []] },
+    initialValue: [],
+    in: { $setUnion: ["$$value", { $ifNull: ["$$this", []] }] },
+  },
+});
+
+interface RawBucket {
+  _id: unknown;
+  sessions: number;
+  flowsPassed: number;
+  flowsFailed: number;
+}
+
+function shapeStats(raw: Record<string, any> | undefined): SessionStats {
+  const t = raw?.totals?.[0];
+
+  const bucket = <K extends string>(rows: RawBucket[] | undefined, key: K) =>
+    (rows ?? []).map((r) => ({
+      [key]: r._id === null || r._id === undefined ? null : String(r._id),
+      sessions: r.sessions,
+      flowsPassed: r.flowsPassed,
+      flowsFailed: r.flowsFailed,
+      passRate: passRateOf(r.flowsPassed, r.flowsFailed),
+    })) as Array<StatsBucket & Record<K, string | null>>;
+
+  return {
+    totals: {
+      sessions: t?.sessions ?? 0,
+      withReports: t?.withReports ?? 0,
+      flowsTotal: t?.flowsTotal ?? 0,
+      flowsCompleted: t?.flowsCompleted ?? 0,
+      flowsPassed: t?.flowsPassed ?? 0,
+      flowsFailed: t?.flowsFailed ?? 0,
+      passRate: passRateOf(t?.flowsPassed ?? 0, t?.flowsFailed ?? 0),
+    },
+    byDay: (raw?.byDay ?? []).map(
+      (r: { _id: string; sessions: number; passed: number; failed: number }) => ({
+        date: r._id,
+        sessions: r.sessions,
+        passed: r.passed,
+        failed: r.failed,
+      }),
+    ),
+    byDomain: bucket(raw?.byDomain, "domain"),
+    byNpType: bucket(raw?.byNpType, "npType"),
+    byVersion: bucket(raw?.byVersion, "version"),
+  };
+}
 
 export class SessionDetailsRepository {
+  /**
+   * Filtered, sorted, paginated sessions with the dashboard's derived fields.
+   *
+   * $facet runs the page and its total count in a single round trip over one
+   * shared filter pass, so the two can never disagree.
+   */
+  async findFiltered(parsed: ParsedSessionQuery): Promise<PaginatedSessions> {
+    const skip = (parsed.page - 1) * parsed.limit;
+
+    const [result] = await SessionDetails.aggregate([
+      ...buildSessionPipeline(parsed),
+      {
+        $facet: {
+          data: [
+            { $sort: { [parsed.sort]: parsed.order, _id: 1 } },
+            { $skip: skip },
+            { $limit: parsed.limit },
+          ],
+          total: [{ $count: "count" }],
+        },
+      },
+    ]).exec();
+
+    const total = (result?.total?.[0]?.count as number) ?? 0;
+
+    return {
+      data: result?.data ?? [],
+      total,
+      page: parsed.page,
+      limit: parsed.limit,
+      totalPages: Math.ceil(total / parsed.limit),
+    };
+  }
+
+  /**
+   * Dashboard KPIs and breakdowns for the filtered set, in one round trip.
+   *
+   * Every branch of the $facet reads the same filtered, derived documents, so
+   * the headline numbers can never disagree with the charts beneath them.
+   */
+  async aggregateStats(parsed: ParsedSessionQuery): Promise<SessionStats> {
+    const breakdown = (field: string) => [
+      {
+        $group: {
+          _id: `$${field}`,
+          sessions: { $sum: 1 },
+          flowsPassed: { $sum: "$flowsPassed" },
+          flowsFailed: { $sum: "$flowsFailed" },
+        },
+      },
+      { $sort: { sessions: -1 as const, _id: 1 as const } },
+    ];
+
+    const [raw] = await SessionDetails.aggregate([
+      ...buildSessionPipeline(parsed),
+      {
+        $facet: {
+          totals: [
+            {
+              $group: {
+                _id: null,
+                sessions: { $sum: 1 },
+                withReports: {
+                  $sum: { $cond: ["$reportExists", 1, 0] },
+                },
+                flowsTotal: { $sum: "$flowsTotal" },
+                flowsCompleted: { $sum: "$flowsCompleted" },
+                flowsPassed: { $sum: "$flowsPassed" },
+                flowsFailed: { $sum: "$flowsFailed" },
+              },
+            },
+          ],
+          byDay: [
+            {
+              $group: {
+                _id: {
+                  $dateToString: {
+                    format: "%Y-%m-%d",
+                    date: "$createdAt",
+                  },
+                },
+                sessions: { $sum: 1 },
+                passed: { $sum: "$flowsPassed" },
+                failed: { $sum: "$flowsFailed" },
+              },
+            },
+            { $sort: { _id: 1 } },
+          ],
+          byDomain: breakdown("domain"),
+          byNpType: breakdown("npType"),
+          byVersion: breakdown("version"),
+        },
+      },
+    ]).exec();
+
+    return shapeStats(raw);
+  }
+
+  /**
+   * Distinct values for the filter dropdowns, narrowed to the current selection.
+   *
+   * Each dimension EXCLUDES ITS OWN FILTER when computing its own options —
+   * standard faceted search. Applying `domain=X` to the `domains` facet would
+   * collapse that dropdown to the single value already chosen, leaving the user
+   * unable to switch domains without clearing the filter first.
+   *
+   * Every other dimension's filter still applies, so the options offered are
+   * exactly those reachable from the rest of the selection.
+   */
+  async aggregateFacets(parsed: ParsedSessionQuery): Promise<SessionFacets> {
+    const dimensions = [
+      { key: "domains", field: "domain" },
+      { key: "versions", field: "version" },
+      { key: "npTypes", field: "npType" },
+      { key: "sessionTypes", field: "sessionType" },
+      { key: "usecaseIds", field: "usecaseId" },
+    ] as const;
+
+    const dimensionFields = dimensions.map((d) => d.field) as string[];
+
+    // Split the filter: non-dimension criteria apply to every branch, while
+    // dimension criteria are re-applied per branch minus that branch's own.
+    const baseMatch: Record<string, unknown> = {};
+    const dimensionMatch: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(parsed.match)) {
+      if (dimensionFields.includes(key)) dimensionMatch[key] = value;
+      else baseMatch[key] = value;
+    }
+
+    const branchFor = (ownField: string) => {
+      const others = Object.fromEntries(
+        Object.entries(dimensionMatch).filter(([k]) => k !== ownField),
+      );
+      return [
+        { $match: others },
+        { $match: { [ownField]: { $nin: [null, ""] } } },
+        { $group: { _id: `$${ownField}` } },
+        { $sort: { _id: 1 as const } },
+      ];
+    };
+
+    // Derived fields are still needed: `result` is a valid filter here and is
+    // computed, not stored.
+    const head = buildSessionPipeline({ ...parsed, match: baseMatch });
+
+    const [raw] = await SessionDetails.aggregate([
+      ...head,
+      {
+        $facet: Object.fromEntries(
+          dimensions.map((d) => [d.key, branchFor(d.field)]),
+        ),
+      },
+    ]).exec();
+
+    const values = (rows: { _id: unknown }[] | undefined): string[] =>
+      (rows ?? []).map((r) => String(r._id));
+
+    return {
+      domains: values(raw?.domains),
+      versions: values(raw?.versions),
+      npTypes: values(raw?.npTypes),
+      sessionTypes: values(raw?.sessionTypes),
+      usecaseIds: values(raw?.usecaseIds),
+    };
+  }
+
+  /**
+   * The shared head of both participant pipelines: one grouped document per
+   * subscriber host.
+   *
+   * Driven from sessions, not payloads. Sessions carry the identity (npId) and
+   * the date filter, both indexed, and payloads are reached through the indexed
+   * sessionId. Grouping payloads directly would scan a collection of full
+   * request/response bodies with no index that fits.
+   */
+  private participantHead(parsed: ParsedNpQuery): PipelineStage[] {
+    const stages: PipelineStage[] = [
+      { $match: parsed.match },
+      {
+        $addFields: {
+          host: hostExpr("$npId"),
+          // flowMap is Mixed and defaults to null; $objectToArray throws on
+          // anything that is not an object.
+          flowMapEntries: {
+            $cond: [
+              { $eq: [{ $type: "$flowMap" }, "object"] },
+              { $objectToArray: "$flowMap" },
+              [],
+            ],
+          },
+        },
+      },
+      // Sessions with an unparseable npId have no participant identity, and the
+      // workbench's own host describes nobody.
+      { $match: { host: { $nin: [null, ...EXCLUDED_HOSTS] } } },
+    ];
+
+    if (parsed.hostSearch) {
+      stages.push({
+        $match: { host: { $regex: parsed.hostSearch, $options: "i" } },
+      });
+    }
+
+    stages.push(
+      {
+        /**
+         * npType picks which side of the context identifies this participant:
+         * a BAP session's own URI is bap_uri, a BPP session's is bpp_uri. The
+         * few payloads matching neither fall back to the session's earliest.
+         *
+         * Session documents are not unique on sessionId, so a duplicated
+         * session attaches the same payload rollup twice — harmless here
+         * because both figures taken from it, $min and a distinct set union,
+         * are idempotent under duplication.
+         */
+        $lookup: {
+          from: "payloads",
+          let: { sid: "$sessionId", nptype: "$npType", h: "$host" },
+          pipeline: [
+            { $match: { $expr: { $eq: ["$sessionId", "$$sid"] } } },
+            {
+              $project: {
+                flowId: 1,
+                createdAt: 1,
+                uri: {
+                  $cond: [
+                    { $eq: ["$$nptype", "BAP"] },
+                    "$jsonRequest.context.bap_uri",
+                    "$jsonRequest.context.bpp_uri",
+                  ],
+                },
+              },
+            },
+            {
+              $project: {
+                flowId: 1,
+                createdAt: 1,
+                uhost: hostExpr("$uri"),
+              },
+            },
+            {
+              $group: {
+                _id: null,
+                firstOwn: {
+                  $min: {
+                    $cond: [
+                      { $eq: ["$uhost", "$$h"] },
+                      "$createdAt",
+                      null,
+                    ],
+                  },
+                },
+                firstAny: { $min: "$createdAt" },
+                // A missing flowId would otherwise become a phantom entry in
+                // every distinct-flow count.
+                flows: {
+                  $addToSet: {
+                    $cond: [
+                      { $in: [{ $type: "$flowId" }, ["missing", "null"]] },
+                      "$$REMOVE",
+                      "$flowId",
+                    ],
+                  },
+                },
+              },
+            },
+          ],
+          as: "payloadRollup",
+        },
+      },
+      { $unwind: { path: "$payloadRollup", preserveNullAndEmptyArrays: true } },
+      {
+        $group: {
+          _id: "$host",
+          npTypes: { $addToSet: "$npType" },
+          npIds: { $addToSet: "$npId" },
+          domains: { $addToSet: "$domain" },
+          versions: { $addToSet: "$version" },
+          // Distinct, because sessionId is not unique across documents.
+          sessionIds: { $addToSet: "$sessionId" },
+          firstSessionAt: { $min: "$createdAt" },
+          lastSessionAt: { $max: "$createdAt" },
+          firstPayloadAt: {
+            $min: {
+              $ifNull: ["$payloadRollup.firstOwn", "$payloadRollup.firstAny"],
+            },
+          },
+          attemptedSets: { $push: "$payloadRollup.flows" },
+          judgedSets: {
+            $push: {
+              $map: { input: "$flowMapEntries", as: "e", in: "$$e.k" },
+            },
+          },
+          passedSets: {
+            $push: {
+              $map: {
+                input: {
+                  $filter: {
+                    input: "$flowMapEntries",
+                    as: "e",
+                    cond: { $eq: ["$$e.v", "PASS"] },
+                  },
+                },
+                as: "e",
+                in: "$$e.k",
+              },
+            },
+          },
+        },
+      },
+      {
+        $addFields: {
+          host: "$_id",
+          sessions: { $size: "$sessionIds" },
+          flowsAttempted: { $size: distinctUnion("$attemptedSets") },
+          flowsJudged: { $size: distinctUnion("$judgedSets") },
+          flowsPassed: { $size: distinctUnion("$passedSets") },
+        },
+      },
+      { $addFields: { passRate: PARTICIPANT_PASS_RATE } },
+      {
+        $project: {
+          _id: 0,
+          sessionIds: 0,
+          attemptedSets: 0,
+          judgedSets: 0,
+          passedSets: 0,
+        },
+      },
+    );
+
+    return stages;
+  }
+
+  /**
+   * Filtered, sorted, paginated participants.
+   *
+   * $facet runs the page and its total in one round trip over the same grouped
+   * documents, so the count can never disagree with the rows beneath it.
+   */
+  async aggregateParticipants(
+    parsed: ParsedNpQuery,
+  ): Promise<PaginatedParticipants> {
+    const skip = (parsed.page - 1) * parsed.limit;
+
+    /**
+     * host is the tiebreaker that makes paging stable, but it is also itself
+     * sortable — and `{ host: -1, host: 1 }` is one key in an object literal,
+     * where the literal 1 wins and silently discards the requested direction.
+     * The sessions list never hits this because its tiebreaker, _id, cannot be
+     * sorted on.
+     */
+    const sort =
+      parsed.sort === "host"
+        ? { host: parsed.order }
+        : { [parsed.sort]: parsed.order, host: 1 as const };
+
+    const [result] = await SessionDetails.aggregate([
+      ...this.participantHead(parsed),
+      {
+        $facet: {
+          data: [{ $sort: sort }, { $skip: skip }, { $limit: parsed.limit }],
+          total: [{ $count: "count" }],
+        },
+      },
+    ]).exec();
+
+    const total = (result?.total?.[0]?.count as number) ?? 0;
+
+    return {
+      data: (result?.data ?? []) as ParticipantRow[],
+      total,
+      page: parsed.page,
+      limit: parsed.limit,
+      totalPages: Math.ceil(total / parsed.limit),
+    };
+  }
+
+  /**
+   * One participant, plus the sessions and per-flow verdicts behind its totals.
+   *
+   * The per-flow rollup is a count of verdicts, not distinct flows: the point of
+   * the drill-down is to show that a flow passed twice and failed once, which
+   * the headline distinct figures deliberately flatten away.
+   */
+  async findParticipant(
+    host: string,
+    parsed: ParsedNpQuery,
+  ): Promise<ParticipantDetail | null> {
+    const scoped: ParsedNpQuery = { ...parsed, hostSearch: undefined };
+
+    const [row] = await SessionDetails.aggregate([
+      ...this.participantHead(scoped),
+      { $match: { host } },
+      { $limit: 1 },
+    ]).exec();
+
+    if (!row) return null;
+
+    const sessions = await SessionDetails.aggregate([
+      { $match: scoped.match },
+      {
+        $addFields: {
+          host: hostExpr("$npId"),
+          flowMapEntries: {
+            $cond: [
+              { $eq: [{ $type: "$flowMap" }, "object"] },
+              { $objectToArray: "$flowMap" },
+              [],
+            ],
+          },
+        },
+      },
+      { $match: { host } },
+      { $sort: { createdAt: -1, _id: 1 } },
+      { $limit: 50 },
+      {
+        $project: {
+          _id: 0,
+          sessionId: 1,
+          npType: 1,
+          domain: 1,
+          version: 1,
+          createdAt: 1,
+          reportExists: { $ifNull: ["$reportExists", false] },
+          flowsJudged: { $size: "$flowMapEntries" },
+          flowsPassed: {
+            $size: {
+              $filter: {
+                input: "$flowMapEntries",
+                as: "e",
+                cond: { $eq: ["$$e.v", "PASS"] },
+              },
+            },
+          },
+        },
+      },
+    ]).exec();
+
+    const flows = await SessionDetails.aggregate([
+      { $match: scoped.match },
+      {
+        $addFields: {
+          host: hostExpr("$npId"),
+          flowMapEntries: {
+            $cond: [
+              { $eq: [{ $type: "$flowMap" }, "object"] },
+              { $objectToArray: "$flowMap" },
+              [],
+            ],
+          },
+        },
+      },
+      { $match: { host } },
+      { $unwind: "$flowMapEntries" },
+      {
+        $group: {
+          _id: "$flowMapEntries.k",
+          passed: {
+            $sum: { $cond: [{ $eq: ["$flowMapEntries.v", "PASS"] }, 1, 0] },
+          },
+          failed: {
+            $sum: { $cond: [{ $eq: ["$flowMapEntries.v", "FAIL"] }, 1, 0] },
+          },
+        },
+      },
+      { $sort: { _id: 1 } },
+      { $project: { _id: 0, flowId: "$_id", passed: 1, failed: 1 } },
+    ]).exec();
+
+    return { ...(row as ParticipantRow), recentSessions: sessions, flows };
+  }
+
+  /**
+   * A cursor over the filtered set for streaming export.
+   *
+   * Deliberately a cursor and not an array: an export must not be bounded by
+   * how much of the result set fits in memory.
+   */
+  streamFiltered(parsed: ParsedSessionQuery) {
+    return SessionDetails.aggregate([
+      ...buildSessionPipeline(parsed),
+      { $sort: { [parsed.sort]: parsed.order, _id: 1 } },
+    ]).cursor();
+  }
+
   // Find SessionDetails by sessionId
   async findBySessionId(sessionId: string) {
     return SessionDetails.findOne({ sessionId: sessionId }).exec();

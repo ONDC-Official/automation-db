@@ -28,9 +28,13 @@ export class PayloadRepository {
 	}
 
 	async update(id: string, updatedData: any) {
-		return Payload.findByIdAndUpdate(id, updatedData, { new: true }).populate(
-			"sessionDetails"
-		);
+		// NOTE: this previously chained .populate("sessionDetails") — a path that
+		// does not exist on the Payload schema. Under Mongoose 8's default
+		// strictPopulate that threw AFTER findByIdAndUpdate had already committed,
+		// so the route answered 400 on a request that had succeeded and any client
+		// retrying on 400 wrote twice. Payload links sessions by the plain
+		// `sessionId` string, so there is nothing to populate.
+		return Payload.findByIdAndUpdate(id, updatedData, { new: true });
 	}
 
 	async delete(id: string) {

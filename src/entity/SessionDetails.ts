@@ -24,9 +24,10 @@ export interface ISessionDetails extends Document {
   flows?: IFlow[];
   reportExists?: boolean;
   // flow_summary: per-tag summary (MANDATORY, OPTIONAL, REPORTABLE)
-  flowSummary?: Record<string, IFlowSummaryEntry>;
-  // flowMap: per-flow pass/fail result
-  flowMap?: Record<string, "PASS" | "FAIL">;
+  // Nullable: the schema below defaults it to null, not undefined.
+  flowSummary?: Record<string, IFlowSummaryEntry> | null;
+  // flowMap: per-flow pass/fail result — nullable for the same reason.
+  flowMap?: Record<string, "PASS" | "FAIL"> | null;
   createdAt?: Date;
   updatedAt?: Date;
 }
@@ -57,6 +58,26 @@ const SessionDetailsSchema = new Schema<ISessionDetails>(
   },
   { timestamps: true }
 );
+
+// Indexes for the business dashboard's filter/aggregate queries. Without these
+// every dashboard request is a full collection scan.
+//
+// sessionId is NOT unique: upsertSession assumes uniqueness but the schema never
+// enforced it, so production may already hold duplicates. Promote to unique only
+// after auditing for them.
+SessionDetailsSchema.index({ sessionId: 1 });
+SessionDetailsSchema.index({ userId: 1 });
+SessionDetailsSchema.index({ npId: 1 });
+SessionDetailsSchema.index({ domain: 1 });
+SessionDetailsSchema.index({ version: 1 });
+SessionDetailsSchema.index({ createdAt: -1 });
+// Covers the common dashboard filter: domain + version, newest first.
+SessionDetailsSchema.index({ domain: 1, version: 1, createdAt: -1 });
+// Covers the /filter route's four-field exact match.
+SessionDetailsSchema.index({ npType: 1, npId: 1, domain: 1, version: 1 });
+// Covers the participants rollup: group by npId over a date window. The plain
+// { npId: 1 } index above cannot serve the range as well.
+SessionDetailsSchema.index({ npId: 1, createdAt: -1 });
 
 export const SessionDetails = model<ISessionDetails>("SessionDetails", SessionDetailsSchema);
 

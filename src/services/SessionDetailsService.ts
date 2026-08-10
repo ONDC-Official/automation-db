@@ -1,5 +1,14 @@
-import { SessionDetailsRepository } from "../repositories/SessionDetailsRepository";
+import {
+  SessionDetailsRepository,
+  PaginatedSessions,
+  SessionStats,
+  SessionFacets,
+  PaginatedParticipants,
+  ParticipantDetail,
+} from "../repositories/SessionDetailsRepository";
 import { PayloadRepository } from "../repositories/PayloadRepository";
+import { ParsedSessionQuery } from "../utils/sessionFilters";
+import { ParsedNpQuery } from "../utils/npFilters";
 import { SessionDetails } from "../entity/SessionDetails";
 import { Payload } from "../entity/Payload";
 import { PayloadDetailsDTO } from "../entity/PayloadDetailsDTO";
@@ -27,6 +36,74 @@ export class SessionDetailsService {
       logger.error("Error retrieving all session details", error);
       throw new Error("Error retrieving all session details");
     }
+  }
+
+  /** Filtered + paginated sessions for the business dashboard. */
+  async getFilteredSessions(
+    parsed: ParsedSessionQuery
+  ): Promise<PaginatedSessions> {
+    try {
+      logger.info("Fetching filtered sessions", { match: parsed.match });
+      return await this.sessionRepo.findFiltered(parsed);
+    } catch (error) {
+      logger.error("Error retrieving filtered sessions", error);
+      throw new Error("Error retrieving filtered sessions");
+    }
+  }
+
+  /** KPI totals and breakdowns for the filtered set. */
+  async getSessionStats(parsed: ParsedSessionQuery): Promise<SessionStats> {
+    try {
+      logger.info("Aggregating session stats", { match: parsed.match });
+      return await this.sessionRepo.aggregateStats(parsed);
+    } catch (error) {
+      logger.error("Error aggregating session stats", error);
+      throw new Error("Error aggregating session stats");
+    }
+  }
+
+  /** Distinct values for the dashboard's filter dropdowns. */
+  async getSessionFacets(parsed: ParsedSessionQuery): Promise<SessionFacets> {
+    try {
+      logger.info("Aggregating session facets", { match: parsed.match });
+      return await this.sessionRepo.aggregateFacets(parsed);
+    } catch (error) {
+      logger.error("Error aggregating session facets", error);
+      throw new Error("Error aggregating session facets");
+    }
+  }
+
+  /** One row per Network Participant, keyed by subscriber host. */
+  async getParticipants(
+    parsed: ParsedNpQuery,
+  ): Promise<PaginatedParticipants> {
+    try {
+      logger.info("Aggregating participants", { match: parsed.match });
+      return await this.sessionRepo.aggregateParticipants(parsed);
+    } catch (error) {
+      logger.error("Error aggregating participants", error);
+      throw new Error("Error aggregating participants");
+    }
+  }
+
+  /** One participant, with the sessions and flow verdicts behind its totals. */
+  async getParticipant(
+    host: string,
+    parsed: ParsedNpQuery,
+  ): Promise<ParticipantDetail | null> {
+    try {
+      logger.info("Fetching participant", { host });
+      return await this.sessionRepo.findParticipant(host, parsed);
+    } catch (error) {
+      logger.error("Error fetching participant", error);
+      throw new Error("Error fetching participant");
+    }
+  }
+
+  /** Cursor over the filtered set, for streaming CSV export. */
+  streamFilteredSessions(parsed: ParsedSessionQuery) {
+    logger.info("Streaming sessions for export", { match: parsed.match });
+    return this.sessionRepo.streamFiltered(parsed);
   }
 
   async getSessionById(sessionId: string): Promise<InstanceType<typeof SessionDetails> | null> {
