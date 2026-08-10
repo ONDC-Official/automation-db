@@ -100,6 +100,12 @@ export class SessionDetailsService {
     }
   }
 
+  /** Cursor over every matching participant, for streaming CSV export. */
+  streamParticipants(parsed: ParsedNpQuery) {
+    logger.info("Streaming participants for export", { match: parsed.match });
+    return this.sessionRepo.streamParticipants(parsed);
+  }
+
   /** Cursor over the filtered set, for streaming CSV export. */
   streamFilteredSessions(parsed: ParsedSessionQuery) {
     logger.info("Streaming sessions for export", { match: parsed.match });

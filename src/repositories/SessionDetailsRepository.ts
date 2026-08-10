@@ -45,6 +45,15 @@ export interface ParticipantRow {
   flowsJudged: number;
   /** Distinct flowIds that passed at least once. */
   flowsPassed: number;
+  /**
+   * Distinct flowIds that were judged but never passed.
+   *
+   * The complement of flowsPassed, deliberately not a distinct union of FAIL
+   * verdicts: a flow that failed once and passed later already counts as
+   * passed, so counting it as failed too would break passed + failed = judged
+   * and leave the row disagreeing with its own passRate.
+   */
+  flowsFailed: number;
   passRate: number | null;
 }
 
@@ -498,7 +507,14 @@ export class SessionDetailsRepository {
           flowsPassed: { $size: distinctUnion("$passedSets") },
         },
       },
-      { $addFields: { passRate: PARTICIPANT_PASS_RATE } },
+      // A second pass, because flowsJudged and flowsPassed only exist as of the
+      // $addFields above — a sibling field cannot reference them.
+      {
+        $addFields: {
+          passRate: PARTICIPANT_PASS_RATE,
+          flowsFailed: { $subtract: ["$flowsJudged", "$flowsPassed"] },
+        },
+      },
       {
         $project: {
           _id: 0,
@@ -514,6 +530,19 @@ export class SessionDetailsRepository {
   }
 
   /**
+   * host is the tiebreaker that makes paging stable, but it is also itself
+   * sortable — and `{ host: -1, host: 1 }` is one key in an object literal,
+   * where the literal 1 wins and silently discards the requested direction.
+   * The sessions list never hits this because its tiebreaker, _id, cannot be
+   * sorted on.
+   */
+  private participantSort(parsed: ParsedNpQuery): Record<string, 1 | -1> {
+    return parsed.sort === "host"
+      ? { host: parsed.order }
+      : { [parsed.sort]: parsed.order, host: 1 };
+  }
+
+  /**
    * Filtered, sorted, paginated participants.
    *
    * $facet runs the page and its total in one round trip over the same grouped
@@ -523,18 +552,7 @@ export class SessionDetailsRepository {
     parsed: ParsedNpQuery,
   ): Promise<PaginatedParticipants> {
     const skip = (parsed.page - 1) * parsed.limit;
-
-    /**
-     * host is the tiebreaker that makes paging stable, but it is also itself
-     * sortable — and `{ host: -1, host: 1 }` is one key in an object literal,
-     * where the literal 1 wins and silently discards the requested direction.
-     * The sessions list never hits this because its tiebreaker, _id, cannot be
-     * sorted on.
-     */
-    const sort =
-      parsed.sort === "host"
-        ? { host: parsed.order }
-        : { [parsed.sort]: parsed.order, host: 1 as const };
+    const sort = this.participantSort(parsed);
 
     const [result] = await SessionDetails.aggregate([
       ...this.participantHead(parsed),
@@ -555,6 +573,23 @@ export class SessionDetailsRepository {
       limit: parsed.limit,
       totalPages: Math.ceil(total / parsed.limit),
     };
+  }
+
+  /**
+   * Cursor over every participant matching the filter, in the requested order —
+   * the export deliberately ignores paging, so the file holds the whole filtered
+   * set rather than whichever page happened to be on screen.
+   *
+   * allowDiskUse because the $group holds one entry per host with its flow sets,
+   * which the 100MB in-memory stage limit does not guarantee room for.
+   */
+  streamParticipants(parsed: ParsedNpQuery) {
+    return SessionDetails.aggregate([
+      ...this.participantHead(parsed),
+      { $sort: this.participantSort(parsed) },
+    ])
+      .allowDiskUse(true)
+      .cursor();
   }
 
   /**

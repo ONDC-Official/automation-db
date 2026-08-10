@@ -14,6 +14,10 @@ import {
   parseSessionQuery,
 } from "../utils/sessionFilters";
 import { parseNpQuery } from "../utils/npFilters";
+import {
+  PARTICIPANT_CSV_HEADERS,
+  participantCsvValues,
+} from "../utils/participantCsv";
 import { csvRow, pluck } from "../utils/csv";
 
 // Instantiate repositories and service
@@ -164,6 +168,50 @@ export const getParticipantDetail = async (req: Request, res: Response) => {
     res
       .status(500)
       .json({ error: true, message: "Error fetching participant" });
+  }
+};
+
+/**
+ * Streaming CSV export of the participants table, exactly as it renders.
+ * GET /api/sessions/participants/export?<filters>&tz=Asia/Kolkata
+ *
+ * The column set is fixed rather than caller-chosen — the point of this export
+ * is "give me what I am looking at", which the Export page's column picker
+ * already covers for sessions.
+ *
+ * Cells carry display text, not raw values, so `tz` matters: without it the
+ * timestamps would silently render in the server's zone and disagree with the
+ * table the user exported.
+ */
+export const exportParticipants = async (req: Request, res: Response) => {
+  const parsed = parseNpQuery(req.query);
+  if (parsed.errors.length > 0) {
+    res.status(400).json({ error: true, messages: parsed.errors });
+    return;
+  }
+
+  const filename = `participants-${new Date().toISOString().slice(0, 10)}.csv`;
+
+  res.setHeader("Content-Type", "text/csv; charset=utf-8");
+  res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+
+  const cursor = sessionDetailsService.streamParticipants(parsed);
+
+  try {
+    res.write(csvRow(PARTICIPANT_CSV_HEADERS));
+
+    for await (const row of cursor) {
+      res.write(csvRow(participantCsvValues(row, parsed.timeZone)));
+    }
+
+    res.end();
+  } catch (error) {
+    logger.error("Error exporting participants", error);
+    // Same reasoning as exportSessions: the headers are long gone, so a
+    // truncated download is the only honest signal left.
+    res.destroy(error as Error);
+  } finally {
+    await cursor.close();
   }
 };
 

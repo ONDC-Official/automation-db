@@ -18,6 +18,7 @@ import {
   getSessionStats,
   getSessionFacets,
   exportSessions,
+  exportParticipants,
   getParticipants,
   getParticipantDetail,
 } from "../controllers/SessionDetailsController";
@@ -29,6 +30,8 @@ router.get("/stats", getSessionStats);
 router.get("/facets", getSessionFacets);
 router.get("/export", exportSessions);
 router.get("/participants", getParticipants);
+// Before /participants/:host, which would otherwise match "export" as a host.
+router.get("/participants/export", exportParticipants);
 router.get("/participants/:host", getParticipantDetail);
 router.get("/filter", getSessionsByNp);
 router.get("/subscriber-urls/:userId", getSubscriberUrlsByUserId);

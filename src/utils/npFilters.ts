@@ -21,6 +21,7 @@ export const NP_FILTER_PARAMS = [
     "limit",
     "sort",
     "order",
+    "tz",
 ] as const;
 
 /**
@@ -37,6 +38,7 @@ export const NP_SORTABLE_FIELDS = [
     "flowsAttempted",
     "flowsJudged",
     "flowsPassed",
+    "flowsFailed",
     "passRate",
 ] as const;
 
@@ -61,7 +63,30 @@ export interface ParsedNpQuery {
     limit: number;
     sort: string;
     order: 1 | -1;
+    /**
+     * IANA zone the CSV export renders timestamps in, so the file matches the
+     * table the user was looking at. Ignored by the JSON endpoints, which send
+     * instants and let the browser format them.
+     */
+    timeZone: string;
     errors: string[];
+}
+
+export const DEFAULT_TIME_ZONE = "UTC";
+
+/**
+ * Whether the runtime knows this zone.
+ *
+ * Intl is the only authority available — there is no list to check against —
+ * and it throws RangeError rather than returning false for an unknown zone.
+ */
+export function isValidTimeZone(zone: string): boolean {
+    try {
+        new Intl.DateTimeFormat("en-IN", { timeZone: zone });
+        return true;
+    } catch {
+        return false;
+    }
 }
 
 const escapeRegex = (value: string): string =>
@@ -208,6 +233,13 @@ export function parseNpQuery(query: unknown): ParsedNpQuery {
         }
     }
 
+    let timeZone = DEFAULT_TIME_ZONE;
+    const rawTimeZone = asString(q.tz);
+    if (rawTimeZone !== undefined) {
+        if (isValidTimeZone(rawTimeZone)) timeZone = rawTimeZone;
+        else errors.push("tz must be a valid IANA time zone");
+    }
+
     let order: 1 | -1 = -1;
     const rawOrder = asString(q.order);
     if (rawOrder !== undefined) {
@@ -223,6 +255,7 @@ export function parseNpQuery(query: unknown): ParsedNpQuery {
         limit,
         sort,
         order,
+        timeZone,
         errors,
     };
 }

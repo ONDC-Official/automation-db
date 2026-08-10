@@ -478,11 +478,321 @@ describe("GET /api/sessions/participants/:host", () => {
     });
 });
 
+describe("participants passed / failed", () => {
+    it("counts flowsFailed as the judged flows that never passed", async () => {
+        await seedPair({
+            npId: "https://buyer.example.com",
+            sessionId: "s-1",
+            flowId: "flow-a",
+            sessionAt: "2026-07-01T10:00:00.000Z",
+            payloadAt: "2026-07-01T10:00:05.000Z",
+            flowMap: { "flow-a": "PASS", "flow-b": "FAIL", "flow-c": "FAIL" },
+        });
+
+        const res = await get("/api/sessions/participants");
+
+        expect(res.body.data[0]).toMatchObject({
+            flowsJudged: 3,
+            flowsPassed: 1,
+            flowsFailed: 2,
+        });
+    });
+
+    it("keeps passed + failed equal to judged on every row", async () => {
+        // The invariant the column pair exists to show. A distinct union of
+        // FAIL verdicts would break it here: flow-a both failed and passed.
+        await seedPair({
+            npId: "https://buyer.example.com",
+            sessionId: "s-1",
+            flowId: "flow-a",
+            sessionAt: "2026-07-01T10:00:00.000Z",
+            payloadAt: "2026-07-01T10:00:05.000Z",
+            flowMap: { "flow-a": "FAIL", "flow-b": "FAIL" },
+        });
+        await seedPair({
+            npId: "https://buyer.example.com",
+            sessionId: "s-2",
+            flowId: "flow-a",
+            sessionAt: "2026-07-02T10:00:00.000Z",
+            payloadAt: "2026-07-02T10:00:05.000Z",
+            flowMap: { "flow-a": "PASS" },
+        });
+
+        const [row] = (await get("/api/sessions/participants")).body.data;
+
+        expect(row).toMatchObject({
+            flowsJudged: 2,
+            flowsPassed: 1,
+            flowsFailed: 1,
+        });
+        expect(row.flowsPassed + row.flowsFailed).toBe(row.flowsJudged);
+    });
+
+    it("reports nothing judged as zero failed, not as failure", async () => {
+        await seedPair({
+            npId: "https://buyer.example.com",
+            sessionId: "s-1",
+            sessionAt: "2026-07-01T10:00:00.000Z",
+            payloadAt: "2026-07-01T10:00:05.000Z",
+            flowMap: null,
+        });
+
+        const res = await get("/api/sessions/participants");
+
+        expect(res.body.data[0]).toMatchObject({
+            flowsJudged: 0,
+            flowsFailed: 0,
+            passRate: null,
+        });
+    });
+
+    it("sorts on flowsFailed in both directions", async () => {
+        await seedPair({
+            npId: "https://one.example.com",
+            sessionId: "s-1",
+            sessionAt: "2026-07-01T10:00:00.000Z",
+            payloadAt: "2026-07-01T10:00:05.000Z",
+            flowMap: { "flow-a": "FAIL" },
+        });
+        await seedPair({
+            npId: "https://three.example.com",
+            sessionId: "s-2",
+            sessionAt: "2026-07-01T10:00:00.000Z",
+            payloadAt: "2026-07-01T10:00:05.000Z",
+            flowMap: { "flow-a": "FAIL", "flow-b": "FAIL", "flow-c": "FAIL" },
+        });
+
+        const desc = await get(
+            "/api/sessions/participants?sort=flowsFailed&order=desc",
+        );
+        const asc = await get(
+            "/api/sessions/participants?sort=flowsFailed&order=asc",
+        );
+
+        expect(desc.status).toBe(200);
+        expect(desc.body.data.map((r: { host: string }) => r.host)).toEqual([
+            "three.example.com",
+            "one.example.com",
+        ]);
+        expect(asc.body.data[0].host).toBe("one.example.com");
+    });
+});
+
+/**
+ * The CSV mirrors the table rather than the wire format: cells hold the text the
+ * page renders, so the file a user downloads reads like what they exported.
+ */
+describe("GET /api/sessions/participants/export", () => {
+    /** Enough of RFC 4180 to read back what csvRow writes, quotes and all. */
+    const parseCsv = (text: string): string[][] => {
+        const rows: string[][] = [];
+        let row: string[] = [];
+        let field = "";
+        let quoted = false;
+
+        for (let i = 0; i < text.length; i += 1) {
+            const char = text[i];
+
+            if (quoted) {
+                if (char !== '"') field += char;
+                else if (text[i + 1] === '"') {
+                    field += '"';
+                    i += 1;
+                } else quoted = false;
+                continue;
+            }
+
+            if (char === '"') quoted = true;
+            else if (char === ",") {
+                row.push(field);
+                field = "";
+            } else if (char === "\r" && text[i + 1] === "\n") {
+                row.push(field);
+                rows.push(row);
+                field = "";
+                row = [];
+                i += 1;
+            } else field += char;
+        }
+
+        if (field !== "" || row.length > 0) {
+            row.push(field);
+            rows.push(row);
+        }
+        return rows;
+    };
+
+    it("sends a CSV attachment with a dated filename", async () => {
+        await seedPair({
+            npId: "https://buyer.example.com",
+            sessionId: "s-1",
+            sessionAt: "2026-07-01T10:00:00.000Z",
+            payloadAt: "2026-07-01T10:00:05.000Z",
+        });
+
+        const res = await get("/api/sessions/participants/export");
+
+        expect(res.status).toBe(200);
+        expect(res.headers["content-type"]).toMatch(/text\/csv/);
+        expect(res.headers["content-disposition"]).toMatch(
+            /^attachment; filename="participants-\d{4}-\d{2}-\d{2}\.csv"$/,
+        );
+    });
+
+    it("writes the table's own headers, in the table's order", async () => {
+        const res = await get("/api/sessions/participants/export");
+
+        expect(parseCsv(res.text)[0]).toEqual([
+            "Participant",
+            "Role",
+            "Sessions",
+            "First session",
+            "First payload",
+            "Flows attempted",
+            "Flows judged",
+            "Passed",
+            "Failed",
+            "Pass rate",
+        ]);
+    });
+
+    it("exports the whole filtered set, not the page on screen", async () => {
+        for (let i = 0; i < 5; i += 1) {
+            await seedPair({
+                npId: `https://np-${i}.example.com`,
+                sessionId: `s-${i}`,
+                sessionAt: "2026-07-01T10:00:00.000Z",
+                payloadAt: "2026-07-01T10:00:05.000Z",
+            });
+        }
+
+        // limit is what the table was paging by; the file ignores it.
+        const res = await get("/api/sessions/participants/export?limit=2");
+
+        expect(parseCsv(res.text)).toHaveLength(6);
+    });
+
+    it("carries display text, not wire values", async () => {
+        await seedPair({
+            npId: "https://buyer.example.com",
+            sessionId: "s-1",
+            flowId: "flow-a",
+            sessionAt: "2026-07-01T10:00:00.000Z",
+            payloadAt: "2026-07-01T10:00:05.000Z",
+            flowMap: { "flow-a": "PASS", "flow-b": "FAIL" },
+        });
+
+        const [, row] = parseCsv(
+            (await get("/api/sessions/participants/export?tz=UTC")).text,
+        );
+
+        expect(row[0]).toBe("buyer.example.com");
+        expect(row[1]).toBe("BAP");
+        expect(row[3]).toMatch(/1 Jul 2026/);
+        expect(row[7]).toBe("1");
+        expect(row[8]).toBe("1");
+        // 0.5 on the wire, "50.0%" on the page.
+        expect(row[9]).toBe("50.0%");
+    });
+
+    it('writes "Never" for a participant that sent no payload', async () => {
+        // A real state — the session exists, nothing ever arrived — which the
+        // table shows as a badge rather than as a zero date.
+        await seedSession({
+            sessionId: "s-1",
+            npId: "https://buyer.example.com",
+            createdAt: at("2026-07-01T10:00:00.000Z"),
+        } as never);
+
+        const [, row] = parseCsv(
+            (await get("/api/sessions/participants/export")).text,
+        );
+
+        expect(row[4]).toBe("Never");
+        // Nothing judged is unmeasured, not 0%.
+        expect(row[9]).toBe("—");
+    });
+
+    it("renders timestamps in the caller's zone", async () => {
+        // 20:00 UTC is already the next day in Kolkata. Without tz the file
+        // would silently use the server's zone and disagree with the table.
+        await seedPair({
+            npId: "https://buyer.example.com",
+            sessionId: "s-1",
+            sessionAt: "2026-07-01T20:00:00.000Z",
+            payloadAt: "2026-07-01T20:00:05.000Z",
+        });
+
+        const utc = await get("/api/sessions/participants/export?tz=UTC");
+        const ist = await get(
+            "/api/sessions/participants/export?tz=Asia/Kolkata",
+        );
+
+        expect(parseCsv(utc.text)[1][3]).toMatch(/1 Jul 2026/);
+        expect(parseCsv(ist.text)[1][3]).toMatch(/2 Jul 2026/);
+    });
+
+    it("rejects a time zone the runtime does not know", async () => {
+        const res = await get("/api/sessions/participants/export?tz=Not/AZone");
+
+        expect(res.status).toBe(400);
+        expect(res.body.messages).toContain(
+            "tz must be a valid IANA time zone",
+        );
+    });
+
+    it("honours the filters and sort the table was showing", async () => {
+        await seedPair({
+            npId: "https://alpha.example.com",
+            sessionId: "s-1",
+            sessionAt: "2026-07-01T10:00:00.000Z",
+            payloadAt: "2026-07-01T10:00:05.000Z",
+        });
+        await seedPair({
+            npId: "https://zulu.example.com",
+            sessionId: "s-2",
+            sessionAt: "2026-07-01T10:00:00.000Z",
+            payloadAt: "2026-07-01T10:00:05.000Z",
+        });
+        await seedPair({
+            npId: "https://seller.example.org",
+            sessionId: "s-3",
+            npType: "BPP",
+            sessionAt: "2026-07-01T10:00:00.000Z",
+            payloadAt: "2026-07-01T10:00:05.000Z",
+        });
+
+        const filtered = await get(
+            "/api/sessions/participants/export?npType=BPP",
+        );
+        expect(parseCsv(filtered.text).slice(1).map((r) => r[0])).toEqual([
+            "seller.example.org",
+        ]);
+
+        const sorted = await get(
+            "/api/sessions/participants/export?sort=host&order=desc",
+        );
+        expect(parseCsv(sorted.text).slice(1).map((r) => r[0])).toEqual([
+            "zulu.example.com",
+            "seller.example.org",
+            "alpha.example.com",
+        ]);
+    });
+});
+
 describe("participants route ordering", () => {
     it("does not shadow the wildcard session route", async () => {
         // /participants must resolve as a literal, not as a sessionId.
         const res = await get("/api/sessions/participants");
         expect(res.status).toBe(200);
         expect(Array.isArray(res.body.data)).toBe(true);
+    });
+
+    it("does not read /participants/export as a subscriber host", async () => {
+        // The detail route would happily 404 on a host called "export".
+        const res = await get("/api/sessions/participants/export");
+
+        expect(res.status).toBe(200);
+        expect(res.headers["content-type"]).toMatch(/text\/csv/);
     });
 });
