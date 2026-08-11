@@ -112,6 +112,45 @@ describe("date range", () => {
 
         expect(res.body.total).toBe(1);
     });
+
+    // The "Today" preset sends the same date for both bounds. A date-only `to`
+    // has to mean the END of that day, or the window is zero-width and the day
+    // the user is actually looking at comes back empty.
+    it("covers the whole day when from and to are the same plain date", async () => {
+        await seedSession(at("2026-08-11T07:36:04.039Z"));
+
+        const res = await get("/api/sessions/?from=2026-08-11&to=2026-08-11");
+
+        expect(res.body.total).toBe(1);
+    });
+
+    it("includes a session created late on the `to` day", async () => {
+        await seedSession(at("2026-08-11T23:59:59.998Z"));
+
+        const res = await get("/api/sessions/?from=2026-08-01&to=2026-08-11");
+
+        expect(res.body.total).toBe(1);
+    });
+
+    it("still excludes the day after the `to` bound", async () => {
+        await seedSession(at("2026-08-12T00:00:00.000Z"));
+
+        const res = await get("/api/sessions/?from=2026-08-01&to=2026-08-11");
+
+        expect(res.body.total).toBe(0);
+    });
+
+    // A bound carrying an explicit time is honoured exactly — widening those
+    // too would silently stretch a caller's precise window by a whole day.
+    it("does not widen a `to` bound that carries a time", async () => {
+        await seedSession(at("2026-08-11T12:00:00Z"));
+
+        const res = await get(
+            "/api/sessions/?from=2026-08-01&to=2026-08-11T00:00:00Z",
+        );
+
+        expect(res.body.total).toBe(0);
+    });
 });
 
 describe("reportExists filter", () => {

@@ -6,6 +6,7 @@
  * beneath it.
  */
 import { PipelineStage } from "mongoose";
+import { parseDateBound } from "./dateRange";
 
 /** Every param that switches GET /api/sessions/ out of legacy bare-array mode. */
 export const SESSION_FILTER_PARAMS = [
@@ -108,22 +109,6 @@ const escapeRegex = (value: string): string =>
 const asString = (value: unknown): string | undefined =>
     typeof value === "string" && value.trim() !== "" ? value.trim() : undefined;
 
-function parseDate(
-    value: unknown,
-    field: string,
-    errors: string[],
-): Date | undefined {
-    const raw = asString(value);
-    if (!raw) return undefined;
-
-    const date = new Date(raw);
-    if (Number.isNaN(date.getTime())) {
-        errors.push(`${field} must be a valid ISO 8601 date`);
-        return undefined;
-    }
-    return date;
-}
-
 function parseInteger(
     value: unknown,
     field: string,
@@ -169,8 +154,8 @@ export function parseSessionQuery(query: unknown): ParsedSessionQuery {
     }
 
     // createdAt range.
-    const from = parseDate(q.from, "from", errors);
-    const to = parseDate(q.to, "to", errors);
+    const from = parseDateBound(q.from, "from", "start", errors);
+    const to = parseDateBound(q.to, "to", "end", errors);
     if (from || to) {
         const range: Record<string, Date> = {};
         if (from) range.$gte = from;
