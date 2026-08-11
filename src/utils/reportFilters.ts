@@ -5,6 +5,7 @@
  * (test_id, user_id) and a shared abstraction would have to know about both
  * anyway.
  */
+import { parseDateBound } from "./dateRange";
 
 /** Params that switch GET /report/ out of legacy bare-array mode. */
 export const REPORT_FILTER_PARAMS = [
@@ -64,19 +65,8 @@ export function parseReportQuery(query: unknown): ParsedReportQuery {
         match.test_id = { $regex: escapeRegex(search), $options: "i" };
     }
 
-    const parseDate = (value: unknown, field: string): Date | undefined => {
-        const raw = asString(value);
-        if (!raw) return undefined;
-        const date = new Date(raw);
-        if (Number.isNaN(date.getTime())) {
-            errors.push(`${field} must be a valid ISO 8601 date`);
-            return undefined;
-        }
-        return date;
-    };
-
-    const from = parseDate(q.from, "from");
-    const to = parseDate(q.to, "to");
+    const from = parseDateBound(q.from, "from", "start", errors);
+    const to = parseDateBound(q.to, "to", "end", errors);
     if (from || to) {
         const range: Record<string, Date> = {};
         if (from) range.$gte = from;

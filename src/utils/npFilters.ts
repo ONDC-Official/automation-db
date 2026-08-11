@@ -7,6 +7,7 @@
  * endpoint has, and a shared abstraction would have to know about all three
  * anyway.
  */
+import { parseDateBound } from "./dateRange";
 
 /** Params that the participants endpoints recognise. */
 export const NP_FILTER_PARAMS = [
@@ -173,19 +174,8 @@ export function parseNpQuery(query: unknown): ParsedNpQuery {
         if (value !== undefined) match[field] = value;
     }
 
-    const parseDate = (value: unknown, field: string): Date | undefined => {
-        const raw = asString(value);
-        if (!raw) return undefined;
-        const date = new Date(raw);
-        if (Number.isNaN(date.getTime())) {
-            errors.push(`${field} must be a valid ISO 8601 date`);
-            return undefined;
-        }
-        return date;
-    };
-
-    const from = parseDate(q.from, "from");
-    const to = parseDate(q.to, "to");
+    const from = parseDateBound(q.from, "from", "start", errors);
+    const to = parseDateBound(q.to, "to", "end", errors);
     if (from || to) {
         const range: Record<string, Date> = {};
         if (from) range.$gte = from;
