@@ -5,6 +5,10 @@ import path from "path";
 import fsPromise from "fs/promises";
 import generator from "mochawesome-report-generator";
 import logger from "@ondc/automation-logger";
+import {
+  hasReportFilterParams,
+  parseReportQuery,
+} from "../utils/reportFilters";
 
 
 const reportDir = path.resolve(__dirname, "../output");
@@ -85,11 +89,37 @@ export const createReport = async (
   }
 };
 
+/**
+ * Fetch reports.
+ *
+ * Same opt-in shape as GET /api/sessions/: a bare call keeps returning the
+ * legacy unbounded array, while any recognised filter/pagination param switches
+ * to { data, total, page, limit, totalPages } with each report joined to its
+ * session via the test_id = "PW_" + sessionId convention.
+ */
 export const getAllReports = async (req: Request, res: Response): Promise<void> => {
+  if (!hasReportFilterParams(req.query)) {
+    try {
+      const reports = await reportService.getAllReports();
+      res.json(reports);
+    } catch (error) {
+      logger.error("Error fetching all reports", error);
+      res.status(500).json({ error: "Failed to fetch reports" });
+    }
+    return;
+  }
+
+  const parsed = parseReportQuery(req.query);
+  if (parsed.errors.length > 0) {
+    res.status(400).json({ error: true, messages: parsed.errors });
+    return;
+  }
+
   try {
-    const reports = await reportService.getAllReports();
-    res.json(reports);
+    const result = await reportService.getPaginatedReports(parsed);
+    res.json(result);
   } catch (error) {
+    logger.error("Error fetching paginated reports", error);
     res.status(500).json({ error: "Failed to fetch reports" });
   }
 };

@@ -8,6 +8,17 @@ import { UserService } from "../services/UserService";
 import { UserRepository } from "../repositories/UserRepository";
 import { ReportService } from "../services/ReportService";
 import { ReportRepository } from "../repositories/ReportRepository";
+import {
+  hasSessionFilterParams,
+  parseExportColumns,
+  parseSessionQuery,
+} from "../utils/sessionFilters";
+import { parseNpQuery } from "../utils/npFilters";
+import {
+  PARTICIPANT_CSV_HEADERS,
+  participantCsvValues,
+} from "../utils/participantCsv";
+import { csvRow, pluck } from "../utils/csv";
 
 // Instantiate repositories and service
 const sessionRepo = new SessionDetailsRepository();
@@ -22,16 +33,230 @@ const sessionDetailsService = new SessionDetailsService(
 const userService = new UserService(userRepo)
 
 /**
- * Fetch all sessions
+ * Fetch sessions.
+ *
+ * Two modes, chosen by whether the caller supplied any recognised filter param:
+ *
+ *   GET /api/sessions/                  → bare unbounded array (legacy contract
+ *                                         the automation stack depends on)
+ *   GET /api/sessions/?page=1&domain=x  → { data, total, page, limit, totalPages }
+ *
+ * Keeping both on one route means existing callers need no change while the
+ * dashboard gets real pagination.
  */
 export const getAllSessions = async (req: Request, res: Response) => {
+  if (!hasSessionFilterParams(req.query)) {
+    try {
+      logger.info("Fetching all sessions");
+      const sessions = await sessionDetailsService.getAllSessions();
+      res.json(sessions);
+    } catch (error) {
+      logger.error("Error retrieving sessions", error);
+      res.status(500).send("Error retrieving sessions");
+    }
+    return;
+  }
+
+  const parsed = parseSessionQuery(req.query);
+  if (parsed.errors.length > 0) {
+    res.status(400).json({ error: true, messages: parsed.errors });
+    return;
+  }
+
   try {
-    logger.info("Fetching all sessions");
-    const sessions = await sessionDetailsService.getAllSessions();
-    res.json(sessions);
+    logger.info("Fetching filtered sessions", { query: req.query });
+    const result = await sessionDetailsService.getFilteredSessions(parsed);
+    res.json(result);
   } catch (error) {
-    logger.error("Error retrieving sessions", error);
-    res.status(500).send("Error retrieving sessions");
+    logger.error("Error retrieving filtered sessions", error);
+    res.status(500).json({ error: true, message: "Error retrieving sessions" });
+  }
+};
+
+/**
+ * KPI totals and breakdowns for the filtered set.
+ * GET /api/sessions/stats?<same filters as the list>
+ */
+export const getSessionStats = async (req: Request, res: Response) => {
+  const parsed = parseSessionQuery(req.query);
+  if (parsed.errors.length > 0) {
+    res.status(400).json({ error: true, messages: parsed.errors });
+    return;
+  }
+
+  try {
+    const stats = await sessionDetailsService.getSessionStats(parsed);
+    res.json(stats);
+  } catch (error) {
+    logger.error("Error aggregating session stats", error);
+    res.status(500).json({ error: true, message: "Error aggregating stats" });
+  }
+};
+
+/**
+ * Distinct values for the filter dropdowns.
+ * GET /api/sessions/facets?<same filters as the list>
+ */
+export const getSessionFacets = async (req: Request, res: Response) => {
+  const parsed = parseSessionQuery(req.query);
+  if (parsed.errors.length > 0) {
+    res.status(400).json({ error: true, messages: parsed.errors });
+    return;
+  }
+
+  try {
+    const facets = await sessionDetailsService.getSessionFacets(parsed);
+    res.json(facets);
+  } catch (error) {
+    logger.error("Error aggregating session facets", error);
+    res.status(500).json({ error: true, message: "Error aggregating facets" });
+  }
+};
+
+/**
+ * One row per Network Participant, keyed by the host of its subscriber URL.
+ * GET /api/sessions/participants?<filters>
+ */
+export const getParticipants = async (req: Request, res: Response) => {
+  const parsed = parseNpQuery(req.query);
+  if (parsed.errors.length > 0) {
+    res.status(400).json({ error: true, messages: parsed.errors });
+    return;
+  }
+
+  try {
+    const participants = await sessionDetailsService.getParticipants(parsed);
+    res.json(participants);
+  } catch (error) {
+    logger.error("Error aggregating participants", error);
+    res
+      .status(500)
+      .json({ error: true, message: "Error aggregating participants" });
+  }
+};
+
+/**
+ * One participant, with the sessions and flow verdicts behind its totals.
+ * GET /api/sessions/participants/:host?<filters>
+ */
+export const getParticipantDetail = async (req: Request, res: Response) => {
+  const parsed = parseNpQuery(req.query);
+  if (parsed.errors.length > 0) {
+    res.status(400).json({ error: true, messages: parsed.errors });
+    return;
+  }
+
+  // The host travels as a path segment, so it arrives percent-encoded.
+  const host = decodeURIComponent(req.params.host ?? "").toLowerCase();
+  if (!host) {
+    res.status(400).json({ error: true, messages: ["host is required"] });
+    return;
+  }
+
+  try {
+    const participant = await sessionDetailsService.getParticipant(
+      host,
+      parsed,
+    );
+    if (!participant) {
+      res.status(404).json({ error: true, message: "Participant not found" });
+      return;
+    }
+    res.json(participant);
+  } catch (error) {
+    logger.error("Error fetching participant", error);
+    res
+      .status(500)
+      .json({ error: true, message: "Error fetching participant" });
+  }
+};
+
+/**
+ * Streaming CSV export of the participants table, exactly as it renders.
+ * GET /api/sessions/participants/export?<filters>&tz=Asia/Kolkata
+ *
+ * The column set is fixed rather than caller-chosen — the point of this export
+ * is "give me what I am looking at", which the Export page's column picker
+ * already covers for sessions.
+ *
+ * Cells carry display text, not raw values, so `tz` matters: without it the
+ * timestamps would silently render in the server's zone and disagree with the
+ * table the user exported.
+ */
+export const exportParticipants = async (req: Request, res: Response) => {
+  const parsed = parseNpQuery(req.query);
+  if (parsed.errors.length > 0) {
+    res.status(400).json({ error: true, messages: parsed.errors });
+    return;
+  }
+
+  const filename = `participants-${new Date().toISOString().slice(0, 10)}.csv`;
+
+  res.setHeader("Content-Type", "text/csv; charset=utf-8");
+  res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+
+  const cursor = sessionDetailsService.streamParticipants(parsed);
+
+  try {
+    res.write(csvRow(PARTICIPANT_CSV_HEADERS));
+
+    for await (const row of cursor) {
+      res.write(csvRow(participantCsvValues(row, parsed.timeZone)));
+    }
+
+    res.end();
+  } catch (error) {
+    logger.error("Error exporting participants", error);
+    // Same reasoning as exportSessions: the headers are long gone, so a
+    // truncated download is the only honest signal left.
+    res.destroy(error as Error);
+  } finally {
+    await cursor.close();
+  }
+};
+
+/**
+ * Streaming CSV export of the filtered set.
+ * GET /api/sessions/export?<filters>&columns=a,b,c
+ *
+ * Rows are written as the cursor yields them, so export size is bounded by the
+ * database rather than by available memory.
+ */
+export const exportSessions = async (req: Request, res: Response) => {
+  const parsed = parseSessionQuery(req.query);
+  const { columns, errors: columnErrors } = parseExportColumns(
+    req.query.columns
+  );
+  const errors = [...parsed.errors, ...columnErrors];
+
+  if (errors.length > 0) {
+    res.status(400).json({ error: true, messages: errors });
+    return;
+  }
+
+  const filename = `sessions-${new Date().toISOString().slice(0, 10)}.csv`;
+
+  res.setHeader("Content-Type", "text/csv; charset=utf-8");
+  res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+
+  const cursor = sessionDetailsService.streamFilteredSessions(parsed);
+
+  try {
+    res.write(csvRow([...columns]));
+
+    for await (const doc of cursor) {
+      res.write(csvRow(columns.map((c) => pluck(doc, c))));
+    }
+
+    res.end();
+  } catch (error) {
+    logger.error("Error exporting sessions", error);
+    // Headers are already sent by this point, so there is no way to turn this
+    // into a clean 500 — destroy the response so the client sees a truncated
+    // download rather than silently trusting a partial file.
+    res.destroy(error as Error);
+  } finally {
+    await cursor.close();
   }
 };
 

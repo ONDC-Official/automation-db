@@ -1,0 +1,12 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    // vitest/mongodb-memory-server ship modern exports maps that the base
+    // config's legacy `moduleResolution: node` cannot follow. We only care that
+    // OUR test sources typecheck, not their .d.ts files.
+    "skipLibCheck": true
+  },
+  "include": ["src/**/*", "src/types/**/*"],
+  "exclude": ["node_modules"]
+}
