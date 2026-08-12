@@ -22,16 +22,7 @@ const ctx = (over: Record<string, unknown> = {}) => ({
 });
 
 /** A BAP session plus one payload attributed to it. */
-async function seedPair({
-    npId,
-    sessionId,
-    npType = "BAP",
-    flowId = "flow-1",
-    sessionAt,
-    payloadAt,
-    uri,
-    flowMap,
-}: {
+async function seedPair(args: {
     npId: string;
     sessionId: string;
     npType?: string;
@@ -40,12 +31,35 @@ async function seedPair({
     payloadAt: string;
     uri?: Record<string, unknown>;
     flowMap?: Record<string, string> | null;
+    /**
+     * A row is one host in one role on one domain+version, so the tests that
+     * exercise the split vary these. Omit the key to take the factory's
+     * ONDC:FIS10 / 2.1.0; pass it explicitly as undefined to seed a session
+     * with the field absent altogether.
+     */
+    domain?: string | null;
+    version?: string | null;
 }) {
+    const {
+        npId,
+        sessionId,
+        npType = "BAP",
+        flowId = "flow-1",
+        sessionAt,
+        payloadAt,
+        uri,
+        flowMap,
+    } = args;
+
     await seedSession({
         sessionId,
         npId,
         npType,
         flowMap,
+        // Key presence, not value: `domain: undefined` has to reach the factory
+        // to override its default, which a `!== undefined` guard would swallow.
+        ...("domain" in args && { domain: args.domain }),
+        ...("version" in args && { version: args.version }),
         createdAt: at(sessionAt),
     } as never);
     await seedPayload({
@@ -80,11 +94,179 @@ describe("GET /api/sessions/participants", () => {
         expect(res.body.total).toBe(1);
         expect(res.body.data[0]).toMatchObject({
             host: "buyer.example.com",
-            npTypes: ["BAP"],
+            npType: "BAP",
+            domain: "ONDC:FIS10",
+            version: "2.1.0",
             sessions: 2,
             firstSessionAt: "2026-07-01T10:00:00.000Z",
             lastSessionAt: "2026-07-03T10:00:00.000Z",
             firstPayloadAt: "2026-07-01T10:00:05.000Z",
+        });
+    });
+
+    it("splits a host that acted as both BAP and BPP into a row each", async () => {
+        // The whole point of the split: one merged row could only carry the
+        // earliest payload across both roles, so "first payload as a BPP" was
+        // unanswerable.
+        await seedPair({
+            npId: "https://np.example.com",
+            sessionId: "s-bap",
+            npType: "BAP",
+            sessionAt: "2026-07-01T10:00:00.000Z",
+            payloadAt: "2026-07-01T10:00:05.000Z",
+        });
+        await seedPair({
+            npId: "https://np.example.com",
+            sessionId: "s-bpp",
+            npType: "BPP",
+            sessionAt: "2026-07-05T10:00:00.000Z",
+            payloadAt: "2026-07-05T10:00:05.000Z",
+        });
+
+        const res = await get("/api/sessions/participants?sort=npType&order=asc");
+
+        expect(res.body.total).toBe(2);
+        expect(res.body.data).toMatchObject([
+            {
+                host: "np.example.com",
+                npType: "BAP",
+                sessions: 1,
+                firstPayloadAt: "2026-07-01T10:00:05.000Z",
+            },
+            {
+                host: "np.example.com",
+                npType: "BPP",
+                sessions: 1,
+                firstPayloadAt: "2026-07-05T10:00:05.000Z",
+            },
+        ]);
+    });
+
+    it("splits one host and role across domains and across versions", async () => {
+        await seedPair({
+            npId: "https://np.example.com",
+            sessionId: "s-fis",
+            domain: "ONDC:FIS10",
+            version: "2.1.0",
+            sessionAt: "2026-07-01T10:00:00.000Z",
+            payloadAt: "2026-07-01T10:00:05.000Z",
+        });
+        await seedPair({
+            npId: "https://np.example.com",
+            sessionId: "s-ret",
+            domain: "ONDC:RET10",
+            version: "2.1.0",
+            sessionAt: "2026-07-02T10:00:00.000Z",
+            payloadAt: "2026-07-02T10:00:05.000Z",
+        });
+        await seedPair({
+            npId: "https://np.example.com",
+            sessionId: "s-ret-2",
+            domain: "ONDC:RET10",
+            version: "2.0.0",
+            sessionAt: "2026-07-03T10:00:00.000Z",
+            payloadAt: "2026-07-03T10:00:05.000Z",
+        });
+
+        const res = await get(
+            "/api/sessions/participants?sort=domain&order=asc",
+        );
+
+        expect(res.body.total).toBe(3);
+        expect(
+            res.body.data.map((r: { domain: string; version: string }) => [
+                r.domain,
+                r.version,
+            ]),
+        ).toEqual([
+            ["ONDC:FIS10", "2.1.0"],
+            ["ONDC:RET10", "2.0.0"],
+            ["ONDC:RET10", "2.1.0"],
+        ]);
+    });
+
+    it("partitions sessions across the split rather than duplicating them", async () => {
+        // Two roles on one host: the split rows must still add back up to the
+        // session count the merged row used to show.
+        for (const [i, npType] of ["BAP", "BPP", "BAP"].entries()) {
+            await seedPair({
+                npId: "https://np.example.com",
+                sessionId: `s-${i}`,
+                npType,
+                sessionAt: "2026-07-01T10:00:00.000Z",
+                payloadAt: "2026-07-01T10:00:05.000Z",
+            });
+        }
+
+        const res = await get("/api/sessions/participants");
+        const total = res.body.data.reduce(
+            (sum: number, r: { sessions: number }) => sum + r.sessions,
+            0,
+        );
+
+        expect(res.body.total).toBe(2);
+        expect(total).toBe(3);
+    });
+
+    it("treats a missing, a null and an empty domain as one row", async () => {
+        // A document-valued $group._id omits a field that resolves to missing,
+        // so without normalisation these would be three separate rows — and the
+        // missing-domain one would arrive with no `domain` key at all.
+        await seedPair({
+            npId: "https://np.example.com",
+            sessionId: "s-undef",
+            domain: undefined,
+            sessionAt: "2026-07-01T10:00:00.000Z",
+            payloadAt: "2026-07-01T10:00:05.000Z",
+        });
+        await seedPair({
+            npId: "https://np.example.com",
+            sessionId: "s-null",
+            domain: null,
+            sessionAt: "2026-07-02T10:00:00.000Z",
+            payloadAt: "2026-07-02T10:00:05.000Z",
+        });
+        await seedPair({
+            npId: "https://np.example.com",
+            sessionId: "s-empty",
+            domain: "",
+            sessionAt: "2026-07-03T10:00:00.000Z",
+            payloadAt: "2026-07-03T10:00:05.000Z",
+        });
+
+        const res = await get("/api/sessions/participants");
+
+        expect(res.body.total).toBe(1);
+        expect(res.body.data[0]).toMatchObject({
+            host: "np.example.com",
+            domain: null,
+            sessions: 3,
+        });
+        expect(res.body.data[0]).toHaveProperty("domain");
+    });
+
+    it("selects the blank slice through the __none__ sentinel", async () => {
+        await seedPair({
+            npId: "https://np.example.com",
+            sessionId: "s-blank",
+            domain: null,
+            sessionAt: "2026-07-01T10:00:00.000Z",
+            payloadAt: "2026-07-01T10:00:05.000Z",
+        });
+        await seedPair({
+            npId: "https://np.example.com",
+            sessionId: "s-fis",
+            domain: "ONDC:FIS10",
+            sessionAt: "2026-07-02T10:00:00.000Z",
+            payloadAt: "2026-07-02T10:00:05.000Z",
+        });
+
+        const res = await get("/api/sessions/participants?domain=__none__");
+
+        expect(res.body.total).toBe(1);
+        expect(res.body.data[0]).toMatchObject({
+            domain: null,
+            sessions: 1,
         });
     });
 
@@ -357,6 +539,77 @@ describe("GET /api/sessions/participants", () => {
         expect(asc.body.data[0].host).toBe("alpha.example.com");
     });
 
+    it("honours descending order on every identity column", async () => {
+        // All four double as the paging tiebreaker, so each one is its own
+        // chance to write `{ domain: -1, ..., domain: 1 }` and lose the
+        // direction to the literal 1.
+        await seedPair({
+            npId: "https://alpha.example.com",
+            sessionId: "s-1",
+            npType: "BAP",
+            domain: "ONDC:FIS10",
+            version: "2.0.0",
+            sessionAt: "2026-07-01T10:00:00.000Z",
+            payloadAt: "2026-07-01T10:00:05.000Z",
+        });
+        await seedPair({
+            npId: "https://zulu.example.com",
+            sessionId: "s-2",
+            npType: "BPP",
+            domain: "ONDC:RET10",
+            version: "2.1.0",
+            sessionAt: "2026-07-02T10:00:00.000Z",
+            payloadAt: "2026-07-02T10:00:05.000Z",
+        });
+
+        for (const [field, low, high] of [
+            ["host", "alpha.example.com", "zulu.example.com"],
+            ["npType", "BAP", "BPP"],
+            ["domain", "ONDC:FIS10", "ONDC:RET10"],
+            ["version", "2.0.0", "2.1.0"],
+        ] as const) {
+            const desc = await get(
+                `/api/sessions/participants?sort=${field}&order=desc`,
+            );
+            const asc = await get(
+                `/api/sessions/participants?sort=${field}&order=asc`,
+            );
+
+            expect(
+                desc.body.data.map((r: Record<string, string>) => r[field]),
+            ).toEqual([high, low]);
+            expect(
+                asc.body.data.map((r: Record<string, string>) => r[field]),
+            ).toEqual([low, high]);
+        }
+    });
+
+    it("pages one host's slices without repeating or skipping one", async () => {
+        // Same host on every row, so host alone cannot break the tie — this is
+        // what the rest of the identity chain is for.
+        for (const domain of ["ONDC:FIS10", "ONDC:RET10", "ONDC:TRV11"]) {
+            await seedPair({
+                npId: "https://np.example.com",
+                sessionId: `s-${domain}`,
+                domain,
+                sessionAt: "2026-07-01T10:00:00.000Z",
+                payloadAt: "2026-07-01T10:00:05.000Z",
+            });
+        }
+
+        const pages = await Promise.all(
+            [1, 2, 3].map((page) =>
+                get(`/api/sessions/participants?limit=1&page=${page}`),
+            ),
+        );
+        const seen = pages.flatMap((p) =>
+            p.body.data.map((r: { domain: string }) => r.domain),
+        );
+
+        expect(seen).toHaveLength(3);
+        expect(new Set(seen).size).toBe(3);
+    });
+
     it("survives a flowMap that is neither an object nor null", async () => {
         // flowMap is Schema.Types.Mixed, so it can hold a string or an array,
         // and $objectToArray throws on both.
@@ -454,6 +707,82 @@ describe("GET /api/sessions/participants/:host", () => {
         expect(res.body.flows).toEqual([
             { flowId: "flow-a", passed: 1, failed: 1 },
         ]);
+    });
+
+    it("scopes the drill-down to the clicked slice, not the whole host", async () => {
+        // The three identity params are a pre-group match, so pinning them
+        // narrows the head to the one row that was clicked — and carries the
+        // same narrowing into recentSessions and the flow verdicts.
+        await seedPair({
+            npId: "https://np.example.com",
+            sessionId: "s-bap",
+            npType: "BAP",
+            flowId: "flow-a",
+            sessionAt: "2026-07-01T10:00:00.000Z",
+            payloadAt: "2026-07-01T10:00:05.000Z",
+            flowMap: { "flow-a": "PASS" },
+        });
+        await seedPair({
+            npId: "https://np.example.com",
+            sessionId: "s-bpp",
+            npType: "BPP",
+            flowId: "flow-b",
+            sessionAt: "2026-07-05T10:00:00.000Z",
+            payloadAt: "2026-07-05T10:00:05.000Z",
+            flowMap: { "flow-b": "FAIL" },
+        });
+
+        const res = await get(
+            "/api/sessions/participants/np.example.com" +
+                "?npType=BAP&domain=ONDC:FIS10&version=2.1.0",
+        );
+
+        expect(res.status).toBe(200);
+        expect(res.body).toMatchObject({
+            host: "np.example.com",
+            npType: "BAP",
+            domain: "ONDC:FIS10",
+            version: "2.1.0",
+            sessions: 1,
+            flowsPassed: 1,
+            firstPayloadAt: "2026-07-01T10:00:05.000Z",
+        });
+        expect(res.body.recentSessions).toEqual([
+            expect.objectContaining({ sessionId: "s-bap", npType: "BAP" }),
+        ]);
+        expect(res.body.flows).toEqual([
+            { flowId: "flow-a", passed: 1, failed: 0 },
+        ]);
+    });
+
+    it("addresses a blank-domain slice through the sentinel", async () => {
+        await seedPair({
+            npId: "https://np.example.com",
+            sessionId: "s-blank",
+            domain: null,
+            version: null,
+            sessionAt: "2026-07-01T10:00:00.000Z",
+            payloadAt: "2026-07-01T10:00:05.000Z",
+        });
+        await seedPair({
+            npId: "https://np.example.com",
+            sessionId: "s-fis",
+            sessionAt: "2026-07-02T10:00:00.000Z",
+            payloadAt: "2026-07-02T10:00:05.000Z",
+        });
+
+        const res = await get(
+            "/api/sessions/participants/np.example.com" +
+                "?npType=BAP&domain=__none__&version=__none__",
+        );
+
+        expect(res.status).toBe(200);
+        expect(res.body).toMatchObject({
+            domain: null,
+            version: null,
+            sessions: 1,
+        });
+        expect(res.body.recentSessions).toHaveLength(1);
     });
 
     it("404s for a host with no sessions", async () => {
@@ -645,6 +974,8 @@ describe("GET /api/sessions/participants/export", () => {
         expect(parseCsv(res.text)[0]).toEqual([
             "Participant",
             "Role",
+            "Domain",
+            "Version",
             "Sessions",
             "First session",
             "First payload",
@@ -688,11 +1019,13 @@ describe("GET /api/sessions/participants/export", () => {
 
         expect(row[0]).toBe("buyer.example.com");
         expect(row[1]).toBe("BAP");
-        expect(row[3]).toMatch(/1 Jul 2026/);
-        expect(row[7]).toBe("1");
-        expect(row[8]).toBe("1");
+        expect(row[2]).toBe("ONDC:FIS10");
+        expect(row[3]).toBe("2.1.0");
+        expect(row[5]).toMatch(/1 Jul 2026/);
+        expect(row[9]).toBe("1");
+        expect(row[10]).toBe("1");
         // 0.5 on the wire, "50.0%" on the page.
-        expect(row[9]).toBe("50.0%");
+        expect(row[11]).toBe("50.0%");
     });
 
     it('writes "Never" for a participant that sent no payload', async () => {
@@ -708,9 +1041,9 @@ describe("GET /api/sessions/participants/export", () => {
             (await get("/api/sessions/participants/export")).text,
         );
 
-        expect(row[4]).toBe("Never");
+        expect(row[6]).toBe("Never");
         // Nothing judged is unmeasured, not 0%.
-        expect(row[9]).toBe("—");
+        expect(row[11]).toBe("—");
     });
 
     it("renders timestamps in the caller's zone", async () => {
@@ -728,8 +1061,8 @@ describe("GET /api/sessions/participants/export", () => {
             "/api/sessions/participants/export?tz=Asia/Kolkata",
         );
 
-        expect(parseCsv(utc.text)[1][3]).toMatch(/1 Jul 2026/);
-        expect(parseCsv(ist.text)[1][3]).toMatch(/2 Jul 2026/);
+        expect(parseCsv(utc.text)[1][5]).toMatch(/1 Jul 2026/);
+        expect(parseCsv(ist.text)[1][5]).toMatch(/2 Jul 2026/);
     });
 
     it("rejects a time zone the runtime does not know", async () => {

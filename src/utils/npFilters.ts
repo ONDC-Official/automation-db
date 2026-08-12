@@ -29,9 +29,15 @@ export const NP_FILTER_PARAMS = [
  * Sort keys a client may ask for. All of these are produced by the $group, so
  * they are applied after it — unlike the session list, none of them is a stored
  * field.
+ *
+ * The first four are the row's compound identity, and so double as the paging
+ * tiebreaker; see participantSort.
  */
 export const NP_SORTABLE_FIELDS = [
     "host",
+    "npType",
+    "domain",
+    "version",
     "sessions",
     "firstSessionAt",
     "lastSessionAt",
@@ -51,6 +57,18 @@ export const NP_SORTABLE_FIELDS = [
  * "participants" while describing nobody.
  */
 export const EXCLUDED_HOSTS = ["workbench.ondc.tech"] as const;
+
+/**
+ * Wire value for "this slice recorded no role / no domain / no version at all".
+ *
+ * domain and version are optional on a session, so `(host, BAP, null, null)` is
+ * a real participant row — but an absent query param and an empty one are
+ * indistinguishable here (asString rejects "", and the client's compactParams
+ * drops it before it is even sent), so without a sentinel a null slice would be
+ * permanently unaddressable. Shaped like the frontend's own ANY_VALUE sentinel,
+ * and impossible as a real ONDC domain or version.
+ */
+export const NP_NULL_SENTINEL = "__none__";
 
 export const DEFAULT_NP_LIMIT = 50;
 export const MAX_NP_LIMIT = 500;
@@ -163,7 +181,8 @@ export function parseNpQuery(query: unknown): ParsedNpQuery {
     const match: Record<string, unknown> = {};
 
     // Exact-match session fields. A participant is a group of sessions, so
-    // filtering here narrows which sessions count toward each participant.
+    // filtering here narrows which sessions count toward each participant —
+    // and, on the detail route, pins the single slice being drilled into.
     for (const field of [
         "npType",
         "domain",
@@ -171,7 +190,11 @@ export function parseNpQuery(query: unknown): ParsedNpQuery {
         "sessionType",
     ] as const) {
         const value = asString(q[field]);
-        if (value !== undefined) match[field] = value;
+        if (value === undefined) continue;
+        // null matches a missing field too, so these are exactly the three
+        // blank states blankToNull folds into one group.
+        match[field] =
+            value === NP_NULL_SENTINEL ? { $in: [null, ""] } : value;
     }
 
     const from = parseDateBound(q.from, "from", "start", errors);
