@@ -28,12 +28,20 @@ export interface PaginatedSessions {
  */
 export interface ParticipantRow {
   host: string;
-  /** A host may have acted as both sides across sessions. */
-  npTypes: string[];
-  /** The raw subscriber URLs that collapsed into this host. */
+  /**
+   * One row is one NP in ONE role on ONE domain+version, so a host that acted
+   * as both sides — or spanned domains — appears once per combination.
+   *
+   * All three are nullable for the reason hostExpr type-guards npId: these
+   * documents come from an upsert that does not always cast, and domain and
+   * version are optional on the schema besides. A null here is a real value —
+   * "ran sessions with none recorded" — addressable through NP_NULL_SENTINEL.
+   */
+  npType: string | null;
+  domain: string | null;
+  version: string | null;
+  /** The raw subscriber URLs that collapsed into this row. */
   npIds: string[];
-  domains: string[];
-  versions: string[];
   /** Distinct sessionIds — session documents are not unique on sessionId. */
   sessions: number;
   firstSessionAt: Date | null;
@@ -76,7 +84,7 @@ export interface ParticipantDetail extends ParticipantRow {
     flowsJudged: number;
     flowsPassed: number;
   }>;
-  /** Per-flow rollup across every session this participant ran. */
+  /** Per-flow rollup across every session in this slice. */
   flows: Array<{ flowId: string; passed: number; failed: number }>;
 }
 
@@ -134,6 +142,28 @@ const PARTICIPANT_PASS_RATE: Record<string, unknown> = {
     null,
   ],
 };
+
+/**
+ * Missing, null and "" are one value, not three.
+ *
+ * A document-valued $group._id OMITS a field whose expression resolves to
+ * missing, so grouping on a raw optional field would put a session with no
+ * `domain` and a session with `domain: null` in two different buckets — and the
+ * second bucket's `$_id.domain` is itself missing, so the field would vanish
+ * from the row entirely. NP_NULL_SENTINEL selects exactly these three states on
+ * the way back in.
+ */
+const blankToNull = (field: string): Record<string, unknown> => ({
+  $cond: [{ $in: [{ $ifNull: [field, null] }, [null, ""]] }, null, field],
+});
+
+/**
+ * The compound identity of a participant row, in tiebreaker order.
+ *
+ * Every one of these is both sortable and part of the paging tiebreaker, which
+ * is why participantSort has to build its key object carefully.
+ */
+const PARTICIPANT_KEY_FIELDS = ["host", "npType", "domain", "version"] as const;
 
 /** Flattens an array-of-arrays into one distinct set, inside the pipeline. */
 const distinctUnion = (field: string): Record<string, unknown> => ({
@@ -356,7 +386,7 @@ export class SessionDetailsRepository {
 
   /**
    * The shared head of both participant pipelines: one grouped document per
-   * subscriber host.
+   * subscriber host, role and domain+version.
    *
    * Driven from sessions, not payloads. Sessions carry the identity (npId) and
    * the date filter, both indexed, and payloads are reached through the indexed
@@ -369,6 +399,13 @@ export class SessionDetailsRepository {
       {
         $addFields: {
           host: hostExpr("$npId"),
+          // Normalised in place, so the $group below cannot split one blank
+          // slice into three. parsed.match has already run against the raw
+          // fields, and the $lookup's `let: { nptype: "$npType" }` is
+          // unaffected — "" and null both fail $eq against "BAP" either way.
+          npType: blankToNull("$npType"),
+          domain: blankToNull("$domain"),
+          version: blankToNull("$version"),
           // flowMap is Mixed and defaults to null; $objectToArray throws on
           // anything that is not an object.
           flowMapEntries: {
@@ -461,11 +498,24 @@ export class SessionDetailsRepository {
       { $unwind: { path: "$payloadRollup", preserveNullAndEmptyArrays: true } },
       {
         $group: {
-          _id: "$host",
-          npTypes: { $addToSet: "$npType" },
+          // One NP, in one role, on one domain+version. A session document
+          // carries exactly one of each, so this partitions the sessions rather
+          // than fanning them out: the counts below and the flow sets stay
+          // correct with no double counting, and firstPayloadAt becomes what
+          // the column now claims — when this participant first sent us a
+          // payload for this domain+version in this role.
+          //
+          // The domain and version are the session's own, not the payload
+          // context's. The two can in principle disagree; reading them off the
+          // payload would mean hoisting them into the $lookup above and would
+          // change the row set.
+          _id: {
+            host: "$host",
+            npType: "$npType",
+            domain: "$domain",
+            version: "$version",
+          },
           npIds: { $addToSet: "$npId" },
-          domains: { $addToSet: "$domain" },
-          versions: { $addToSet: "$version" },
           // Distinct, because sessionId is not unique across documents.
           sessionIds: { $addToSet: "$sessionId" },
           firstSessionAt: { $min: "$createdAt" },
@@ -500,7 +550,10 @@ export class SessionDetailsRepository {
       },
       {
         $addFields: {
-          host: "$_id",
+          host: "$_id.host",
+          npType: "$_id.npType",
+          domain: "$_id.domain",
+          version: "$_id.version",
           sessions: { $size: "$sessionIds" },
           flowsAttempted: { $size: distinctUnion("$attemptedSets") },
           flowsJudged: { $size: distinctUnion("$judgedSets") },
@@ -530,16 +583,22 @@ export class SessionDetailsRepository {
   }
 
   /**
-   * host is the tiebreaker that makes paging stable, but it is also itself
-   * sortable — and `{ host: -1, host: 1 }` is one key in an object literal,
-   * where the literal 1 wins and silently discards the requested direction.
-   * The sessions list never hits this because its tiebreaker, _id, cannot be
-   * sorted on.
+   * The requested key, then the rest of the row's identity as a tiebreaker
+   * chain so paging is stable.
+   *
+   * Every one of the four identity columns is the tiebreaker AND sortable in
+   * its own right, and an object literal cannot hold a key twice — `{ domain:
+   * -1, ..., domain: 1 }` collapses to one entry where the literal 1 wins and
+   * silently discards the requested direction. So the requested key is emitted
+   * once, first, and the chain skips it. The sessions list never hits this
+   * because its tiebreaker, _id, cannot be sorted on.
    */
   private participantSort(parsed: ParsedNpQuery): Record<string, 1 | -1> {
-    return parsed.sort === "host"
-      ? { host: parsed.order }
-      : { [parsed.sort]: parsed.order, host: 1 };
+    const sort: Record<string, 1 | -1> = { [parsed.sort]: parsed.order };
+    for (const field of PARTICIPANT_KEY_FIELDS) {
+      if (field !== parsed.sort) sort[field] = 1;
+    }
+    return sort;
   }
 
   /**
@@ -562,7 +621,12 @@ export class SessionDetailsRepository {
           total: [{ $count: "count" }],
         },
       },
-    ]).exec();
+    ])
+      // The group holds one entry per host/role/domain/version with its flow
+      // sets, which the 100MB in-memory stage limit does not guarantee room for
+      // — the same reason streamParticipants allows it.
+      .allowDiskUse(true)
+      .exec();
 
     const total = (result?.total?.[0]?.count as number) ?? 0;
 
@@ -593,7 +657,13 @@ export class SessionDetailsRepository {
   }
 
   /**
-   * One participant, plus the sessions and per-flow verdicts behind its totals.
+   * One participant row, plus the sessions and per-flow verdicts behind its
+   * totals.
+   *
+   * Describes the slice the filters select, not the whole host: npType, domain
+   * and version are a pre-group match, so passing them narrows this to the one
+   * row the caller clicked — and scopes recentSessions and the flow verdicts
+   * below to the same slice for free, since both reuse scoped.match.
    *
    * The per-flow rollup is a count of verdicts, not distinct flows: the point of
    * the drill-down is to show that a flow passed twice and failed once, which
@@ -608,6 +678,12 @@ export class SessionDetailsRepository {
     const [row] = await SessionDetails.aggregate([
       ...this.participantHead(scoped),
       { $match: { host } },
+      // The caller normally pins the slice with npType/domain/version, which
+      // are a pre-group match — so the group emits exactly one row for this
+      // host and this $limit is exact. A caller that pins nothing (an old
+      // bookmark, a direct API hit) now gets the first row in the table's own
+      // order rather than whichever group the server happened to emit first.
+      { $sort: this.participantSort(scoped) },
       { $limit: 1 },
     ]).exec();
 

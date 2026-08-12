@@ -52,8 +52,11 @@ export interface ParticipantCsvColumn {
 /** In table order — the CSV is meant to be read next to the page. */
 export const PARTICIPANT_CSV_COLUMNS: ParticipantCsvColumn[] = [
     { header: "Participant", value: (row) => row.host },
-    // Rendered as a row of badges on screen; there is no separator to mirror.
-    { header: "Role", value: (row) => (row.npTypes ?? []).join(" ") },
+    // One role, one domain and one version per row now — the split is what
+    // makes the First payload column below mean anything.
+    { header: "Role", value: (row) => row.npType ?? EM_DASH },
+    { header: "Domain", value: (row) => row.domain ?? EM_DASH },
+    { header: "Version", value: (row) => row.version ?? EM_DASH },
     { header: "Sessions", value: (row) => formatNumber(row.sessions) },
     {
         header: "First session",
