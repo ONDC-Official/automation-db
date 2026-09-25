@@ -127,6 +127,38 @@ const passRateOf = (passed: number, failed: number): number | null =>
   passed + failed > 0 ? passed / (passed + failed) : null;
 
 /**
+ * The only two values `flowMap` is allowed to hold. The field is
+ * `Schema.Types.Mixed`, so nothing at the database level enforces this — a
+ * workbench bug once filled it with the literal "RUN", and because
+ * `flowsFailed` is derived as `flowsJudged - flowsPassed`, every such entry was
+ * reported as a *failed* flow while the per-flow drill-down (which matches
+ * "PASS"/"FAIL" exactly) showed nothing but zeros.
+ *
+ * Filtering here keeps `flowsPassed + flowsFailed === flowsJudged` true by
+ * construction, and keeps the participants view consistent with the sessions
+ * view, which has always matched these literals.
+ */
+const VERDICT_ENTRIES: Record<string, unknown> = {
+  $filter: {
+    input: "$flowMapEntries",
+    as: "e",
+    cond: { $in: ["$$e.v", ["PASS", "FAIL"]] },
+  },
+};
+
+/** Runtime counterpart of VERDICT_ENTRIES, for the write path. */
+export const onlyVerdicts = (
+  flowMap: unknown,
+): Record<string, "PASS" | "FAIL"> => {
+  if (!flowMap || typeof flowMap !== "object" || Array.isArray(flowMap)) return {};
+  const clean: Record<string, "PASS" | "FAIL"> = {};
+  for (const [flowId, verdict] of Object.entries(flowMap as Record<string, unknown>)) {
+    if (verdict === "PASS" || verdict === "FAIL") clean[flowId] = verdict;
+  }
+  return clean;
+};
+
+/**
  * A participant's pass share: distinct flows that ever passed, over distinct
  * flows that were judged at all. Null — never 0 — when nothing is judged, so
  * "no report yet" stays distinguishable from "everything failed".
@@ -528,7 +560,7 @@ export class SessionDetailsRepository {
           attemptedSets: { $push: "$payloadRollup.flows" },
           judgedSets: {
             $push: {
-              $map: { input: "$flowMapEntries", as: "e", in: "$$e.k" },
+              $map: { input: VERDICT_ENTRIES, as: "e", in: "$$e.k" },
             },
           },
           passedSets: {
@@ -715,7 +747,7 @@ export class SessionDetailsRepository {
           version: 1,
           createdAt: 1,
           reportExists: { $ifNull: ["$reportExists", false] },
-          flowsJudged: { $size: "$flowMapEntries" },
+          flowsJudged: { $size: VERDICT_ENTRIES },
           flowsPassed: {
             $size: {
               $filter: {
@@ -930,9 +962,14 @@ export class SessionDetailsRepository {
       sessionId: sessionId,
     }).exec();
 
+    // `flowMap` is a verdict map. The schema types it Mixed, so this is the only
+    // place that can keep a non-verdict out — a workbench bug once wrote the
+    // literal "RUN" here, and because existing keys win below, each bad entry was
+    // sticky against every later upsert. Drop anything that is not a verdict
+    // rather than storing it and making the dashboard interpret it.
     const updatedFlowMap = {
-      ...data.flowMap, // new keys
-      ...(sessionDetail?.flowMap || {}), // existing keys override
+      ...onlyVerdicts(data.flowMap), // new keys
+      ...onlyVerdicts(sessionDetail?.flowMap), // existing keys override
     };
     data.flowMap = updatedFlowMap;
     return SessionDetails.findOneAndUpdate(
@@ -955,9 +992,12 @@ export class SessionDetailsRepository {
       sessionId: sessionId,
     }).exec();
 
+    // Incoming wins here (unlike upsertSession) — a report is authoritative. The
+    // stored side is still filtered so pre-existing pollution does not survive a
+    // report that happens not to mention that flow.
     const updatedFlowMap = {
-      ...(sessionDetail?.flowMap || {}),
-      ...flowMap,
+      ...onlyVerdicts(sessionDetail?.flowMap),
+      ...onlyVerdicts(flowMap),
     };
     return SessionDetails.findOneAndUpdate(
       { sessionId },

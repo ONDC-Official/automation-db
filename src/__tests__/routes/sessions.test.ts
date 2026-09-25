@@ -589,10 +589,10 @@ describe("POST /api/sessions/upsert", () => {
         expect(await SessionDetails.countDocuments()).toBe(1);
     });
 
-    // QUIRK: the merge is `{...incoming, ...existing}`
-    // (SessionDetailsRepository.ts:159-163) so EXISTING KEYS WIN. An upsert can
-    // never overwrite an already-recorded PASS/FAIL. Note this is the exact
-    // OPPOSITE of the analytics endpoint's merge direction.
+    // QUIRK: the merge is `{...incoming, ...existing}` so EXISTING KEYS WIN. An
+    // upsert can never overwrite an already-recorded PASS/FAIL. Note this is the
+    // exact OPPOSITE of the analytics endpoint's merge direction. Both sides are
+    // run through `onlyVerdicts` first, so the rule applies to verdicts only.
     it("merges flowMap with existing keys winning", async () => {
         await post("/api/sessions/upsert").send({
             sessionId: "s-merge",
@@ -607,6 +607,36 @@ describe("POST /api/sessions/upsert", () => {
         });
 
         expect(res.body.flowMap).toEqual({ f1: "PASS", f2: "FAIL" });
+    });
+
+    it("refuses to store a flowMap value that is not a verdict", async () => {
+        // flowMap is Schema.Types.Mixed, so this is the only layer that can keep
+        // a non-verdict out. The workbench used to send every flow key stamped
+        // "RUN"; because existing keys win above, each one was then sticky
+        // against every later upsert, and the participants aggregation reported
+        // it as a failed flow forever.
+        const res = await post("/api/sessions/upsert").send({
+            sessionId: "s-run",
+            npType: "BAP",
+            flowMap: { f1: "PASS", f2: "RUN", f3: null, f4: 7 },
+        });
+
+        expect(res.body.flowMap).toEqual({ f1: "PASS" });
+    });
+
+    it("strips pollution already stored when the next upsert lands", async () => {
+        await seedSession({
+            sessionId: "s-legacy",
+            npType: "BAP",
+            flowMap: { f1: "RUN", f2: "PASS" },
+        } as never);
+
+        const res = await post("/api/sessions/upsert").send({
+            sessionId: "s-legacy",
+            npType: "BAP",
+        });
+
+        expect(res.body.flowMap).toEqual({ f2: "PASS" });
     });
 
     it("links the session to the user when userId is present", async () => {

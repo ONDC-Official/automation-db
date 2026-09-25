@@ -629,6 +629,56 @@ describe("GET /api/sessions/participants", () => {
         });
     });
 
+    it("does not count a non-verdict flowMap value as judged or failed", async () => {
+        // The exact shape of the bug this guards: the workbench stamped "RUN"
+        // over every flow key on each session update. flowsJudged counted keys
+        // blindly and flowsFailed is judged - passed, so four started flows were
+        // reported as four *failed* ones — while the per-flow drill-down, which
+        // matches PASS/FAIL literally, showed all zeros.
+        await seedPair({
+            npId: "https://buyer.example.com",
+            sessionId: "s-1",
+            flowId: "FLOW_A",
+            sessionAt: "2026-07-01T10:00:00.000Z",
+            payloadAt: "2026-07-01T10:05:00.000Z",
+            flowMap: { FLOW_A: "RUN", FLOW_B: "RUN" },
+        });
+
+        const res = await get("/api/sessions/participants");
+
+        expect(res.status).toBe(200);
+        expect(res.body.data[0]).toMatchObject({
+            flowsAttempted: 1, // from the payload — unaffected, and still real
+            flowsJudged: 0,
+            flowsPassed: 0,
+            flowsFailed: 0,
+            passRate: null, // null, never 0: nothing was judged
+        });
+    });
+
+    it("counts real verdicts alongside a polluted entry", async () => {
+        await seedPair({
+            npId: "https://buyer.example.com",
+            sessionId: "s-1",
+            flowId: "FLOW_A",
+            sessionAt: "2026-07-01T10:00:00.000Z",
+            payloadAt: "2026-07-01T10:05:00.000Z",
+            flowMap: { FLOW_A: "PASS", FLOW_B: "FAIL", FLOW_C: "RUN" },
+        });
+
+        const res = await get("/api/sessions/participants");
+
+        expect(res.body.data[0]).toMatchObject({
+            flowsJudged: 2,
+            flowsPassed: 1,
+            flowsFailed: 1,
+            passRate: 0.5,
+        });
+        // The documented invariant, which the "RUN" entry used to break.
+        const row = res.body.data[0];
+        expect(row.flowsPassed + row.flowsFailed).toBe(row.flowsJudged);
+    });
+
     it("ignores a payload with no flowId rather than counting a phantom flow", async () => {
         await seedSession({
             sessionId: "s-1",
