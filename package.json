@@ -13,6 +13,7 @@
         "test:coverage": "vitest run --coverage",
         "test:types": "tsc -p tsconfig.test.json",
         "backfill:reports": "ts-node src/scripts/backfill-reports.ts",
+        "backfill:flowmap": "ts-node src/scripts/backfill-flowmap.ts",
         "typeorm": "typeorm-ts-node-commonjs",
         "migration:generate": "npm run typeorm migration:generate -- ./src/migration/ -d ./src/data-source.ts",
         "migration:run": "npm run typeorm migration:run -- -d ./src/data-source.ts",
