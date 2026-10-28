@@ -63,6 +63,10 @@ export const PARTICIPANT_CSV_COLUMNS: ParticipantCsvColumn[] = [
         value: (row, tz) => formatDateTime(row.firstSessionAt, tz),
     },
     {
+        header: "Last session",
+        value: (row, tz) => formatDateTime(row.lastSessionAt, tz),
+    },
+    {
         // "Never" is a real state — a session was created but no payload ever
         // arrived — and the table says so with a badge rather than an em dash.
         header: "First payload",
