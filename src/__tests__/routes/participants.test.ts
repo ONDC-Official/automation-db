@@ -1028,6 +1028,7 @@ describe("GET /api/sessions/participants/export", () => {
             "Version",
             "Sessions",
             "First session",
+            "Last session",
             "First payload",
             "Flows attempted",
             "Flows judged",
@@ -1072,10 +1073,11 @@ describe("GET /api/sessions/participants/export", () => {
         expect(row[2]).toBe("ONDC:FIS10");
         expect(row[3]).toBe("2.1.0");
         expect(row[5]).toMatch(/1 Jul 2026/);
-        expect(row[9]).toBe("1");
+        expect(row[6]).toMatch(/1 Jul 2026/);
         expect(row[10]).toBe("1");
+        expect(row[11]).toBe("1");
         // 0.5 on the wire, "50.0%" on the page.
-        expect(row[11]).toBe("50.0%");
+        expect(row[12]).toBe("50.0%");
     });
 
     it('writes "Never" for a participant that sent no payload', async () => {
@@ -1091,9 +1093,9 @@ describe("GET /api/sessions/participants/export", () => {
             (await get("/api/sessions/participants/export")).text,
         );
 
-        expect(row[6]).toBe("Never");
+        expect(row[7]).toBe("Never");
         // Nothing judged is unmeasured, not 0%.
-        expect(row[11]).toBe("—");
+        expect(row[12]).toBe("—");
     });
 
     it("renders timestamps in the caller's zone", async () => {
