@@ -13,6 +13,10 @@ const PayloadSchema = new Schema(
     jsonRequest: { type: Object },  // plain JSON object
     jsonResponse: { type: Object }, // plain JSON object
     httpStatus: { type: Number },
+    // FD only: how long the exchange took to be answered, in milliseconds
+    // (network-observability's duration_ms, via the recorder). Absent on every
+    // other payload; the FD report scores answer times from it.
+    durationMs: { type: Number },
     action_id: { type: String },
     sessionId: { type: String, required: true },
   },
