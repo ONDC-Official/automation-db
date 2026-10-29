@@ -12,6 +12,7 @@
         "test:watch": "vitest",
         "test:coverage": "vitest run --coverage",
         "test:types": "tsc -p tsconfig.test.json",
+        "check:tool-versions": "node scripts/check-tool-versions.mjs",
         "backfill:reports": "ts-node src/scripts/backfill-reports.ts",
         "backfill:flowmap": "ts-node src/scripts/backfill-flowmap.ts",
         "typeorm": "typeorm-ts-node-commonjs",

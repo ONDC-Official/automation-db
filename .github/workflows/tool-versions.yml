@@ -1,0 +1,21 @@
+name: Tool versions
+
+# build.yaml is parsed by @ondc/build-tools in the specification workflows and ingested by
+# @ondc/build-tools here; both must run the version pinned in
+# automation-specifications/tooling/versions.env.
+
+on:
+  pull_request:
+  push:
+    branches: [ "main" ]
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: npm ci --no-audit --no-fund
+      - run: npm run check:tool-versions
