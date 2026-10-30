@@ -9,8 +9,8 @@ import { useApi } from "../helpers/api";
  * The fixtures are what automation-report-service posts (its
  * src/fd/__tests__/certification.test.ts writes them when
  * FD_SUMMARY_FIXTURE_DIR is set): a full BOOKING certification run of an
- * issuer, every plan flow judged with no finding and every SLA met on enough
- * samples; and the same run without one plan flow, which the report service
+ * issuer against @ondc/fd-contract's real plan (65 requirement IDs, 7 flows),
+ * every flow judged with no finding and every SLA met on enough samples; and the same run without one plan flow, which the report service
  * records as a certification.missing-flow finding. VALID must come exactly when
  * the plan is fully covered and nothing was found.
  */
@@ -38,7 +38,7 @@ describe("POST /certificates with the FD report service's run summary", () => {
     it("issues VALID for a full BOOKING run with every requirement PASS and no finding", async () => {
         const summary = load("fd-run-summary-valid.json");
         expect(summary.findings).toEqual([]);
-        expect(summary.runs).toHaveLength(5);
+        expect(summary.runs).toHaveLength(7);
 
         const res = await post("/certificates").send(summary);
 
