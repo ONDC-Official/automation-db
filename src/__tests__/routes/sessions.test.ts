@@ -589,6 +589,22 @@ describe("POST /api/sessions/upsert", () => {
         expect(await SessionDetails.countDocuments()).toBe(1);
     });
 
+    it("stores the organisation a session was run for, and leaves it unset when absent", async () => {
+        const withOrg = await post("/api/sessions/upsert").send({
+            sessionId: "s-org",
+            npType: "BAP",
+            userId: "25716",
+            orgId: "11899",
+        });
+        const withoutOrg = await post("/api/sessions/upsert").send({
+            sessionId: "s-no-org",
+            npType: "BAP",
+        });
+
+        expect(withOrg.body.orgId).toBe("11899");
+        expect(withoutOrg.body.orgId).toBeUndefined();
+    });
+
     // QUIRK: the merge is `{...incoming, ...existing}` so EXISTING KEYS WIN. An
     // upsert can never overwrite an already-recorded PASS/FAIL. Note this is the
     // exact OPPOSITE of the analytics endpoint's merge direction. Both sides are
