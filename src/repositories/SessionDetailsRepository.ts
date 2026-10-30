@@ -950,6 +950,7 @@ export class SessionDetailsRepository {
     sessionId: string,
     data: {
       userId?: string;
+      orgId?: string;
       npType: string;
       npId?: string;
       domain?: string;

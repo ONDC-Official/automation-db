@@ -23,6 +23,7 @@ describe("SessionDetails indexes", () => {
 
         expect(keys).toContain(JSON.stringify({ sessionId: 1 }));
         expect(keys).toContain(JSON.stringify({ userId: 1 }));
+        expect(keys).toContain(JSON.stringify({ orgId: 1, createdAt: -1 }));
         expect(keys).toContain(JSON.stringify({ npId: 1 }));
         expect(keys).toContain(JSON.stringify({ domain: 1 }));
         expect(keys).toContain(JSON.stringify({ version: 1 }));
