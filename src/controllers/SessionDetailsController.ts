@@ -296,6 +296,24 @@ export const checkSessionById = async (req: Request, res: Response) => {
 };
 
 /**
+ * What a session covers, for the NP Portal API: its organisation and build.
+ */
+export const getSessionScope = async (req: Request, res: Response) => {
+  const { sessionId } = req.params;
+  try {
+    const scope = await sessionDetailsService.getSessionScope(sessionId);
+    if (!scope) {
+      res.status(404).send("Session not found");
+      return;
+    }
+    res.json(scope);
+  } catch (error) {
+    logger.error(`Error fetching scope of session ID: ${sessionId}`, error);
+    res.status(500).send("Error fetching session scope");
+  }
+};
+
+/**
  * Create a new session
  */
 export const createSession = async (req: Request, res: Response) => {

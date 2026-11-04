@@ -132,6 +132,10 @@ export class SessionDetailsService {
     }
   }
 
+  async getSessionScope(sessionId: string) {
+    return this.sessionRepo.findSessionScope(sessionId);
+  }
+
   async checkSessionById(sessionId: string): Promise<boolean> {
     try {
       logger.info(`Checking existence of session with ID: ${sessionId}`);

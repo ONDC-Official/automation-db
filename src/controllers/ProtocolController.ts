@@ -96,6 +96,33 @@ export const getSpec = async (req: Request, res: Response) => {
     }
 };
 
+/** A query parameter as a list: `?a=1&a=2` and `?a=1` both work. */
+const asList = (value: unknown): string[] | undefined => {
+    const list = (Array.isArray(value) ? value : [value]).filter(
+        (item): item is string => typeof item === "string" && item !== "",
+    );
+    return list.length ? list : undefined;
+};
+
+export const listFlows = async (req: Request, res: Response) => {
+    try {
+        const flows = await protocolService.listFlows({
+            domains: asList(req.query.domain),
+            versions: asList(req.query.version),
+            usecases: asList(req.query.usecase),
+            flowIds: asList(req.query.flowId),
+            tags: asList(req.query.tag),
+            tagMatch: req.query.tagMatch === "all" ? "all" : "any",
+            actions: asList(req.query.action),
+            q: typeof req.query.q === "string" ? req.query.q : undefined,
+        });
+        res.json({ flows });
+    } catch (error) {
+        logger.error("Error listing flows", error);
+        res.status(500).json({ message: "Error listing flows" });
+    }
+};
+
 export const getBuilds = async (_req: Request, res: Response) => {
     try {
         const result = await protocolService.getBuilds();

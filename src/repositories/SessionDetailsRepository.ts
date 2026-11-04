@@ -845,6 +845,14 @@ export class SessionDetailsRepository {
     return SessionDetails.findOneAndDelete({ sessionId: sessionId }).exec();
   }
 
+  // A session's organisation and build, for the NP Portal API
+  async findSessionScope(sessionId: string) {
+    return SessionDetails.findOne({ sessionId })
+      .select({ _id: 0, orgId: 1, domain: 1, version: 1, usecaseId: 1 })
+      .lean()
+      .exec();
+  }
+
   // Check if a session exists
   async checkSessionById(sessionId: string): Promise<boolean> {
     const session = await SessionDetails.exists({ sessionId: sessionId });

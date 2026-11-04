@@ -67,6 +67,38 @@ export interface SpecsQuery {
     docSlug?: string;
 }
 
+export interface FlowCatalogQuery {
+    domains?: string[];
+    versions?: string[];
+    usecases?: string[];
+    flowIds?: string[];
+    tags?: string[];
+    /** With several tags: flows having any of them (default) or all of them. */
+    tagMatch?: "any" | "all";
+    actions?: string[];
+    /** Case-insensitive partial match on flow ID, title and description. */
+    q?: string;
+}
+
+// A flow document carries mock code and examples (about 300 KB each), so the
+// catalog reads only the display fields.
+const FLOW_CATALOG_PROJECTION = {
+    _id: 0,
+    flowId: 1,
+    domain: 1,
+    version: 1,
+    usecase: 1,
+    description: 1,
+    tags: 1,
+    "config.meta.flowName": 1,
+    "config.steps.action_id": 1,
+    "config.steps.api": 1,
+    "config.steps.owner": 1,
+    "config.steps.description": 1,
+    "config.steps.unsolicited": 1,
+    "config.steps.responseFor": 1,
+};
+
 const VALID_INCLUDES = [
     "meta",
     "flows",
@@ -125,6 +157,33 @@ export class ProtocolService {
         } catch (error) {
             throw new Error(`Error ingesting validation table: ${error}`);
         }
+    }
+
+    /** Display information for flows across every build, for the NP Portal API. */
+    async listFlows(query: FlowCatalogQuery) {
+        const filter: Record<string, unknown> = {};
+        if (query.domains?.length) filter.domain = { $in: query.domains };
+        if (query.versions?.length) filter.version = { $in: query.versions };
+        if (query.usecases?.length) filter.usecase = { $in: query.usecases };
+        if (query.flowIds?.length) filter.flowId = { $in: query.flowIds };
+        if (query.tags?.length) {
+            filter.tags = {
+                [query.tagMatch === "all" ? "$all" : "$in"]: query.tags,
+            };
+        }
+        if (query.actions?.length) {
+            filter["config.steps.api"] = { $in: query.actions };
+        }
+        if (query.q) {
+            const $regex = query.q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+            filter.$or = ["flowId", "config.meta.flowName", "description"].map(
+                (field) => ({ [field]: { $regex, $options: "i" } }),
+            );
+        }
+        return getDb()
+            .collection(COLLECTIONS.FLOWS)
+            .find(filter, { projection: FLOW_CATALOG_PROJECTION })
+            .toArray();
     }
 
     async getSpec(query: SpecsQuery) {

@@ -4,6 +4,7 @@ import {
   getAllSessions,
   getSessionById,
   checkSessionById,
+  getSessionScope,
   createSession,
   createPayloadForSession,
   getPayloadBySessionId,
@@ -36,6 +37,7 @@ router.get("/participants/:host", getParticipantDetail);
 router.get("/filter", getSessionsByNp);
 router.get("/subscriber-urls/:userId", getSubscriberUrlsByUserId);
 router.get("/check/:sessionId", checkSessionById);
+router.get("/:sessionId/portal-scope", getSessionScope);
 router.get("/payload/:sessionId", getPayloadBySessionId);
 router.get("/", getAllSessions);
 router.get("/:sessionId", getSessionById);
