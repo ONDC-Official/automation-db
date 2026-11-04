@@ -21,6 +21,8 @@ export interface ISessionDetails extends Document {
   domain?: string | null;
   usecaseId?: string | null;
   userId?: string | null;
+  // NP Portal organisation the session was run for (Login via ONDC only).
+  orgId?: string | null;
   flows?: IFlow[];
   reportExists?: boolean;
   // flow_summary: per-tag summary (MANDATORY, OPTIONAL, REPORTABLE)
@@ -51,6 +53,7 @@ const SessionDetailsSchema = new Schema<ISessionDetails>(
     domain: { type: String },
     usecaseId: { type: String },
     userId: { type: String },
+    orgId: { type: String },
     flows: [FlowSchema],
     reportExists: { type: Boolean, default: false },
     flowSummary: { type: Schema.Types.Mixed, default: null },
@@ -67,6 +70,8 @@ const SessionDetailsSchema = new Schema<ISessionDetails>(
 // after auditing for them.
 SessionDetailsSchema.index({ sessionId: 1 });
 SessionDetailsSchema.index({ userId: 1 });
+// Lists an organisation's sessions, newest first (NP Portal APIs).
+SessionDetailsSchema.index({ orgId: 1, createdAt: -1 });
 SessionDetailsSchema.index({ npId: 1 });
 SessionDetailsSchema.index({ domain: 1 });
 SessionDetailsSchema.index({ version: 1 });

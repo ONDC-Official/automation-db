@@ -544,10 +544,10 @@ export const getSubscriberUrlsByUserId = async (req: Request, res: Response) => 
 /**
  * Upsert a session — create if not exists, update fields if it does
  * POST /api/sessions/upsert
- * Body: { sessionId, userId?, npType, npId?, domain?, version?, usecaseId? }
+ * Body: { sessionId, userId?, orgId?, npType, npId?, domain?, version?, usecaseId? }
  */
 export const upsertSession = async (req: Request, res: Response) => {
-  const { sessionId, userId, npType, npId, domain, version, usecaseId,flowMap } = req.body;
+  const { sessionId, userId, orgId, npType, npId, domain, version, usecaseId,flowMap } = req.body;
 
   if (!sessionId || !npType) {
     res.status(400).json({ error: true, message: "sessionId and npType are required" });
@@ -558,6 +558,7 @@ export const upsertSession = async (req: Request, res: Response) => {
     logger.info(`Upserting session: ${sessionId}`);
     const result = await sessionDetailsService.upsertSession(sessionId, {
       userId,
+      orgId,
       npType,
       npId,
       domain,

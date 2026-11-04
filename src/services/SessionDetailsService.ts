@@ -300,6 +300,7 @@ export class SessionDetailsService {
     sessionId: string,
     data: {
       userId?: string;
+      orgId?: string;
       npType: string;
       npId?: string;
       domain?: string;
