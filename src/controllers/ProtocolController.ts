@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import logger from "@ondc/automation-logger";
 import { ProtocolService } from "../services/ProtocolService";
+import { asList } from "../utils/portalSessions";
 
 const protocolService = new ProtocolService();
 
@@ -94,14 +95,6 @@ export const getSpec = async (req: Request, res: Response) => {
         logger.error("Error fetching spec", error);
         res.status(500).json({ message: "Error fetching spec", error });
     }
-};
-
-/** A query parameter as a list: `?a=1&a=2` and `?a=1` both work. */
-const asList = (value: unknown): string[] | undefined => {
-    const list = (Array.isArray(value) ? value : [value]).filter(
-        (item): item is string => typeof item === "string" && item !== "",
-    );
-    return list.length ? list : undefined;
 };
 
 export const listFlows = async (req: Request, res: Response) => {

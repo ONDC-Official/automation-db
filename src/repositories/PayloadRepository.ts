@@ -19,6 +19,22 @@ export class PayloadRepository {
 		return Payload.find({ sessionId: sessionId });
 	}
 
+	// What working out a session's result needs, oldest first, without the bodies
+	async findResultFields(sessionId: string) {
+		return Payload.find({ sessionId })
+			.select({
+				flowId: 1,
+				transactionId: 1,
+				action: 1,
+				messageId: 1,
+				createdAt: 1,
+				"jsonResponse.response.message.ack.status": 1,
+			})
+			.sort({ createdAt: 1 })
+			.lean()
+			.exec();
+	}
+
 	async findAll() {
 		return Payload.find();
 	}

@@ -14,6 +14,7 @@ import {
   parseSessionQuery,
 } from "../utils/sessionFilters";
 import { parseNpQuery } from "../utils/npFilters";
+import { parsePortalSessionQuery } from "../utils/portalSessions";
 import {
   PARTICIPANT_CSV_HEADERS,
   participantCsvValues,
@@ -313,6 +314,22 @@ export const getSessionScope = async (req: Request, res: Response) => {
   }
 };
 
+/** One organisation's sessions, for the NP Portal API */
+export const getPortalSessions = async (req: Request, res: Response) => {
+  const { orgId } = req.params;
+  try {
+    res.json(
+      await sessionDetailsService.listPortalSessions(
+        orgId,
+        parsePortalSessionQuery(req.query)
+      )
+    );
+  } catch (error) {
+    logger.error(`Error listing sessions of organisation: ${orgId}`, error);
+    res.status(500).send("Error listing sessions");
+  }
+};
+
 /**
  * Create a new session
  */
@@ -382,6 +399,12 @@ export const createPayloadForSession = async (req: Request, res: Response) => {
     logger.info("Creating payload for session", { payloadData });
     const newPayload = await payloadRepo.create(payloadData);
     res.status(201).json(newPayload);
+    // After the reply, so a failure here can never affect the saved message.
+    sessionDetailsService
+      .refreshMessageActivity(payloadData.sessionId)
+      .catch((error) =>
+        logger.error(`Error updating activity of session ${payloadData.sessionId}`, error)
+      );
   } catch (error: any) {
     logger.error("Error creating payload", error);
     res.status(400).send(error.message || "Error creating payload");

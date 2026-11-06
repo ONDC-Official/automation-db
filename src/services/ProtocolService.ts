@@ -186,6 +186,21 @@ export class ProtocolService {
             .toArray();
     }
 
+    /** The flows of one build and the `api` of each step, in order. */
+    async listBuildFlows(domain: string, version: string, usecase: string) {
+        const flows = await getDb()
+            .collection(COLLECTIONS.FLOWS)
+            .find(
+                { domain, version, usecase },
+                { projection: { _id: 0, flowId: 1, "config.steps.api": 1 } },
+            )
+            .toArray();
+        return flows.map((flow) => ({
+            flowId: String(flow.flowId),
+            steps: ((flow.config?.steps ?? []) as { api: string }[]).map((s) => s.api),
+        }));
+    }
+
     async getSpec(query: SpecsQuery) {
         const db = getDb();
         const { domain, version } = query;

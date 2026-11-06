@@ -2,6 +2,13 @@ import { PipelineStage } from "mongoose";
 import { SessionDetails, ISessionDetails } from "../entity/SessionDetails";
 import { UserModel } from "../entity/User";
 import {
+  PORTAL_SESSION_LIMIT,
+  PortalSessionQuery,
+  PortalSessionRow,
+  SESSION_ACTIVE_MS,
+} from "../utils/portalSessions";
+import { SessionResult } from "../utils/sessionResult";
+import {
   buildSessionPipeline,
   ParsedSessionQuery,
 } from "../utils/sessionFilters";
@@ -829,14 +836,17 @@ export class SessionDetailsRepository {
 
   // Create a new session
   async create(sessionData: Partial<ISessionDetails>) {
-    const session = new SessionDetails(sessionData);
+    const session = new SessionDetails({
+      ...sessionData,
+      lastActivityAt: new Date(),
+    });
     return session.save();
   }
 
   async update(sessionId: string, updateData: Partial<ISessionDetails>) {
     return SessionDetails.findOneAndUpdate(
       { sessionId: sessionId },
-      updateData,
+      { ...updateData, lastActivityAt: new Date() },
       { new: true },
     ).exec();
   }
@@ -851,6 +861,100 @@ export class SessionDetailsRepository {
       .select({ _id: 0, orgId: 1, domain: 1, version: 1, usecaseId: 1 })
       .lean()
       .exec();
+  }
+
+  // One organisation's sessions for the NP Portal API, newest first. Fetches one
+  // extra row to know whether more than the limit matched.
+  async findPortalSessions(orgId: string, query: PortalSessionQuery) {
+    const filter: Record<string, unknown> = { orgId };
+    const anyOf = (field: string, values?: string[]) => {
+      if (values?.length) filter[field] = { $in: values };
+    };
+    anyOf("result", query.results);
+    anyOf("userId", query.userIds);
+    anyOf("domain", query.domains);
+    anyOf("version", query.versions);
+    anyOf("usecaseId", query.usecaseIds);
+    anyOf("npId", query.npIds);
+    anyOf("flowIds", query.flowIds);
+    if (query.npType) filter.npType = query.npType;
+    if (query.sessionType) filter.sessionType = query.sessionType;
+    if (query.q) {
+      const $regex = query.q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      filter.$or = ["sessionId", "npId", "userId"].map((field) => ({
+        [field]: { $regex, $options: "i" },
+      }));
+    }
+
+    const range = (from?: string, to?: string) => ({
+      ...(from ? { $gte: new Date(from) } : {}),
+      ...(to ? { $lt: new Date(to) } : {}),
+    });
+    if (query.createdFrom || query.createdTo) {
+      filter.createdAt = range(query.createdFrom, query.createdTo);
+    }
+    const activity: Record<string, unknown>[] = [];
+    if (query.lastActivityFrom || query.lastActivityTo) {
+      activity.push({
+        lastActivityAt: range(query.lastActivityFrom, query.lastActivityTo),
+      });
+    }
+    if (query.status) {
+      const cutoff = new Date(Date.now() - SESSION_ACTIVE_MS);
+      activity.push({
+        lastActivityAt:
+          query.status === "active" ? { $gte: cutoff } : { $lt: cutoff },
+      });
+    }
+    if (activity.length) filter.$and = activity;
+
+    const rows = await SessionDetails.find(filter)
+      .select({
+        _id: 0,
+        sessionId: 1,
+        userId: 1,
+        npType: 1,
+        sessionType: 1,
+        npId: 1,
+        domain: 1,
+        version: 1,
+        usecaseId: 1,
+        result: 1,
+        createdAt: 1,
+        updatedAt: 1,
+        lastActivityAt: 1,
+      })
+      .sort({ createdAt: -1 })
+      .limit(PORTAL_SESSION_LIMIT + 1)
+      .lean()
+      .exec();
+    return {
+      sessions: rows.slice(0, PORTAL_SESSION_LIMIT) as PortalSessionRow[],
+      hasMore: rows.length > PORTAL_SESSION_LIMIT,
+    };
+  }
+
+  // Saves what the newest message changed. Left out of updatedAt on purpose, and
+  // skipped when a newer message already got here first.
+  async saveMessageActivity(
+    sessionId: string,
+    data: { at: Date; flowIds: string[]; result: SessionResult },
+  ) {
+    return SessionDetails.updateOne(
+      {
+        sessionId,
+        $or: [{ resultAsOf: null }, { resultAsOf: { $lte: data.at } }],
+      },
+      {
+        $set: {
+          flowIds: data.flowIds,
+          result: data.result,
+          resultAsOf: data.at,
+        },
+        $max: { lastActivityAt: data.at },
+      },
+      { timestamps: false },
+    ).exec();
   }
 
   // Check if a session exists
@@ -985,7 +1089,7 @@ export class SessionDetailsRepository {
       { sessionId },
       {
         $setOnInsert: { sessionId, sessionType: "AUTOMATION" },
-        $set: data,
+        $set: { ...data, lastActivityAt: new Date() },
       },
       { upsert: true, new: true },
     ).exec();

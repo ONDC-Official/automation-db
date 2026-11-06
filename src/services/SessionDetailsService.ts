@@ -9,6 +9,9 @@ import {
 import { PayloadRepository } from "../repositories/PayloadRepository";
 import { ParsedSessionQuery } from "../utils/sessionFilters";
 import { ParsedNpQuery } from "../utils/npFilters";
+import { PortalSessionQuery, toPortalSession } from "../utils/portalSessions";
+import { SavedMessage, sessionResult } from "../utils/sessionResult";
+import { ProtocolService } from "./ProtocolService";
 import { SessionDetails } from "../entity/SessionDetails";
 import { Payload } from "../entity/Payload";
 import { PayloadDetailsDTO } from "../entity/PayloadDetailsDTO";
@@ -26,6 +29,42 @@ export class SessionDetailsService {
   constructor(sessionRepo: SessionDetailsRepository, payloadRepo: PayloadRepository) {
     this.sessionRepo = sessionRepo;
     this.payloadRepo = payloadRepo;
+  }
+
+  async listPortalSessions(orgId: string, query: PortalSessionQuery) {
+    const { sessions, hasMore } = await this.sessionRepo.findPortalSessions(orgId, query);
+    return { sessions: sessions.map((row) => toPortalSession(row)), hasMore };
+  }
+
+  /**
+   * Brings a session's last activity, flows and result up to date with its saved
+   * messages. Only sessions with an organisation can appear in the NP Portal list,
+   * so the rest are skipped to keep this off their message path.
+   */
+  async refreshMessageActivity(sessionId: string): Promise<void> {
+    const session = await this.sessionRepo.findSessionScope(sessionId);
+    if (!session?.orgId) return;
+
+    const [rows, build] = await Promise.all([
+      this.payloadRepo.findResultFields(sessionId),
+      new ProtocolService().listBuildFlows(
+        String(session.domain),
+        String(session.version),
+        String(session.usecaseId),
+      ),
+    ]);
+    const newest = rows.at(-1) as { createdAt?: Date } | undefined;
+    if (!newest?.createdAt) return;
+
+    const messages: SavedMessage[] = rows.map((row: any) => ({
+      ...row,
+      ack: row.jsonResponse?.response?.message?.ack?.status,
+    }));
+    await this.sessionRepo.saveMessageActivity(sessionId, {
+      at: newest.createdAt,
+      flowIds: [...new Set(rows.flatMap((row) => row.flowId ?? []))],
+      result: sessionResult(build, messages),
+    });
   }
 
   async getAllSessions(): Promise<InstanceType<typeof SessionDetails>[]> {
