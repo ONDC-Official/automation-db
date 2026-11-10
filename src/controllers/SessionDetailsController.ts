@@ -330,6 +330,48 @@ export const getPortalSessions = async (req: Request, res: Response) => {
   }
 };
 
+/** One session of an organisation, for the NP Portal API */
+export const getPortalSession = async (req: Request, res: Response) => {
+  const { orgId, sessionId } = req.params;
+  try {
+    const session = await sessionDetailsService.getPortalSession(orgId, sessionId);
+    if (!session) {
+      res.status(404).send("Session not found");
+      return;
+    }
+    res.json(session);
+  } catch (error) {
+    logger.error(`Error fetching session ID: ${sessionId}`, error);
+    res.status(500).send("Error fetching session");
+  }
+};
+
+/** Saves a session's settings and what changed, for the NP Portal API */
+export const saveSessionSettings = async (req: Request, res: Response) => {
+  const { sessionId } = req.params;
+  const { settings, changedBy, changes } = req.body;
+  if (!settings || typeof settings !== "object") {
+    res.status(400).send("settings is required");
+    return;
+  }
+  try {
+    const saved = await sessionDetailsService.saveSessionSettings(
+      sessionId,
+      settings,
+      changedBy,
+      Array.isArray(changes) ? changes : []
+    );
+    if (!saved) {
+      res.status(404).send("Session not found");
+      return;
+    }
+    res.status(204).send();
+  } catch (error) {
+    logger.error(`Error saving settings of session ID: ${sessionId}`, error);
+    res.status(500).send("Error saving settings");
+  }
+};
+
 /**
  * Create a new session
  */
@@ -588,7 +630,7 @@ export const getSubscriberUrlsByUserId = async (req: Request, res: Response) => 
  * Body: { sessionId, userId?, orgId?, npType, npId?, domain?, version?, usecaseId? }
  */
 export const upsertSession = async (req: Request, res: Response) => {
-  const { sessionId, userId, orgId, npType, npId, domain, version, usecaseId,flowMap } = req.body;
+  const { sessionId, userId, orgId, npType, npId, domain, version, usecaseId,flowMap, settings } = req.body;
 
   if (!sessionId || !npType) {
     res.status(400).json({ error: true, message: "sessionId and npType are required" });
@@ -605,7 +647,8 @@ export const upsertSession = async (req: Request, res: Response) => {
       domain,
       version,
       usecaseId,
-      flowMap
+      flowMap,
+      settings
     });
 
     if (userId && sessionId) {

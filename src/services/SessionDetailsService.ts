@@ -9,10 +9,14 @@ import {
 import { PayloadRepository } from "../repositories/PayloadRepository";
 import { ParsedSessionQuery } from "../utils/sessionFilters";
 import { ParsedNpQuery } from "../utils/npFilters";
-import { PortalSessionQuery, toPortalSession } from "../utils/portalSessions";
-import { SavedMessage, sessionResult } from "../utils/sessionResult";
+import {
+  PortalSessionQuery,
+  toPortalSession,
+  toPortalSessionDetail,
+} from "../utils/portalSessions";
+import { flowSummary, SavedMessage, sessionResult } from "../utils/sessionResult";
 import { ProtocolService } from "./ProtocolService";
-import { SessionDetails } from "../entity/SessionDetails";
+import { ISettingsChange, SessionDetails } from "../entity/SessionDetails";
 import { Payload } from "../entity/Payload";
 import { PayloadDetailsDTO } from "../entity/PayloadDetailsDTO";
 import logger from "@ondc/automation-logger";
@@ -36,6 +40,37 @@ export class SessionDetailsService {
     return { sessions: sessions.map((row) => toPortalSession(row)), hasMore };
   }
 
+  /** The session of that organisation, or null if it has no such session. */
+  async getPortalSession(orgId: string, sessionId: string) {
+    const row = await this.sessionRepo.findPortalSession(orgId, sessionId);
+    if (!row) return null;
+
+    const { messages, build } = await this.loadResultInputs(sessionId, row);
+    return toPortalSessionDetail(
+      row,
+      build.map((flow) => flowSummary(flow, messages)),
+    );
+  }
+
+  private async loadResultInputs(
+    sessionId: string,
+    session: { domain?: string | null; version?: string | null; usecaseId?: string | null },
+  ) {
+    const [rows, build] = await Promise.all([
+      this.payloadRepo.findResultFields(sessionId),
+      new ProtocolService().listBuildFlows(
+        String(session.domain),
+        String(session.version),
+        String(session.usecaseId),
+      ),
+    ]);
+    const messages: (SavedMessage & { createdAt?: Date })[] = rows.map((row: any) => ({
+      ...row,
+      ack: row.jsonResponse?.response?.message?.ack?.status,
+    }));
+    return { messages, build };
+  }
+
   /**
    * Brings a session's last activity, flows and result up to date with its saved
    * messages. Only sessions with an organisation can appear in the NP Portal list,
@@ -45,26 +80,30 @@ export class SessionDetailsService {
     const session = await this.sessionRepo.findSessionScope(sessionId);
     if (!session?.orgId) return;
 
-    const [rows, build] = await Promise.all([
-      this.payloadRepo.findResultFields(sessionId),
-      new ProtocolService().listBuildFlows(
-        String(session.domain),
-        String(session.version),
-        String(session.usecaseId),
-      ),
-    ]);
-    const newest = rows.at(-1) as { createdAt?: Date } | undefined;
+    const { messages, build } = await this.loadResultInputs(sessionId, session);
+    const newest = messages.at(-1);
     if (!newest?.createdAt) return;
 
-    const messages: SavedMessage[] = rows.map((row: any) => ({
-      ...row,
-      ack: row.jsonResponse?.response?.message?.ack?.status,
-    }));
     await this.sessionRepo.saveMessageActivity(sessionId, {
       at: newest.createdAt,
-      flowIds: [...new Set(rows.flatMap((row) => row.flowId ?? []))],
+      flowIds: [...new Set(messages.flatMap((m) => m.flowId ?? []))],
       result: sessionResult(build, messages),
     });
+  }
+
+  /** Whether the session exists. A change with no entries is not recorded. */
+  async saveSessionSettings(
+    sessionId: string,
+    settings: Record<string, boolean>,
+    changedBy: string | undefined,
+    changes: ISettingsChange["changes"],
+  ): Promise<boolean> {
+    const change =
+      changedBy && changes.length
+        ? { changedAt: new Date(), changedBy, changes }
+        : undefined;
+    const { matchedCount } = await this.sessionRepo.saveSettings(sessionId, settings, change);
+    return matchedCount > 0;
   }
 
   async getAllSessions(): Promise<InstanceType<typeof SessionDetails>[]> {
@@ -350,6 +389,7 @@ export class SessionDetailsService {
       version?: string;
       usecaseId?: string;
       flowMap?:string;
+      settings?: Record<string, boolean>;
     }
   ) {
     try {

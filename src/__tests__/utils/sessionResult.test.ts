@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
     BuildFlow,
     SavedMessage,
+    flowSummary,
     latestTry,
     sessionResult,
     stepStates,
@@ -174,5 +175,45 @@ describe("sessionResult", () => {
 
     it("does not treat a flow made only of forms as passed before it runs", () => {
         expect(sessionResult([{ flowId: "F", steps: ["html_form"] }], [])).toBe("incomplete");
+    });
+});
+
+describe("flowSummary", () => {
+    it("counts the latest try and lists every try, oldest first", () => {
+        expect(
+            flowSummary(flowA, [
+                msg("SEARCH", "NACK", { transactionId: "t1" }),
+                msg("SEARCH", "ACK", { transactionId: "t2" }),
+                msg("ON_SEARCH", "NACK", { transactionId: "t2" }),
+            ]),
+        ).toEqual({
+            flowId: "A",
+            totalSteps: 2,
+            passedSteps: 1,
+            failedSteps: 1,
+            transactionIds: ["t1", "t2"],
+        });
+    });
+
+    it("shows a flow that never ran with nothing passed, forms included", () => {
+        const flow = { flowId: "F", steps: ["search", "html_form"] };
+
+        expect(flowSummary(flow, [msg("SEARCH", "ACK", { flowId: "other" })])).toEqual({
+            flowId: "F",
+            totalSteps: 2,
+            passedSteps: 0,
+            failedSteps: 0,
+            transactionIds: [],
+        });
+    });
+
+    it("counts forms as passed once the flow has run", () => {
+        const flow = { flowId: "F", steps: ["search", "html_form", "select"] };
+
+        expect(flowSummary(flow, [msg("SEARCH", "ACK", { flowId: "F" })])).toMatchObject({
+            totalSteps: 3,
+            passedSteps: 2,
+            failedSteps: 0,
+        });
     });
 });

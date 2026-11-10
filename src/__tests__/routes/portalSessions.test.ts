@@ -340,3 +340,172 @@ describe("portal activity backfill", () => {
         expect(ids(await list("?result=incomplete"))).toEqual(["s"]);
     });
 });
+
+describe("GET /api/sessions/portal/:orgId/:sessionId", () => {
+    const detail = (sessionId: string, orgId = ORG) =>
+        get(`/api/sessions/portal/${orgId}/${sessionId}`);
+
+    it("returns the session in full, with every flow of the build", async () => {
+        await seedFlow("A", "search", "on_search");
+        await seedFlow("B", "select");
+        await session("s", {
+            reportExists: true,
+            settings: { useGzip: false },
+            settingsHistory: [
+                {
+                    changedAt: new Date(),
+                    changedBy: "u1",
+                    changes: [{ setting: "useGzip", previousValue: true, newValue: false }],
+                },
+            ],
+        });
+        await seedPayload({
+            sessionId: "s",
+            action: "SEARCH",
+            flowId: "A",
+            transactionId: "t1",
+            ...reply("ACK"),
+        });
+
+        const res = await detail("s");
+
+        expect(res.status).toBe(200);
+        expect(res.body).toMatchObject({
+            sessionId: "s",
+            orgId: ORG,
+            status: "active",
+            reportExists: true,
+            settings: { useGzip: false },
+            settingsHistory: [{ changedBy: "u1" }],
+        });
+        expect(res.body.flowSummary).toEqual([
+            { flowId: "A", totalSteps: 2, passedSteps: 1, failedSteps: 0, transactionIds: ["t1"] },
+            { flowId: "B", totalSteps: 1, passedSteps: 0, failedSteps: 0, transactionIds: [] },
+        ]);
+    });
+
+    it("gives the expiry 4 days after last activity", async () => {
+        const at = ago(DAY);
+        await session("s", { lastActivityAt: at });
+
+        const { body } = await detail("s");
+
+        expect(new Date(body.expiresAt).getTime()).toBe(at.getTime() + 4 * DAY);
+    });
+
+    it("has no expiry once expired", async () => {
+        await session("s", { lastActivityAt: ago(5 * DAY) });
+
+        const { body } = await detail("s");
+
+        expect(body.status).toBe("expired");
+        expect(body.expiresAt).toBeNull();
+    });
+
+    it("has null settings and no history for an older session", async () => {
+        await session("s");
+
+        const { body } = await detail("s");
+
+        expect(body.settings).toBeNull();
+        expect(body.settingsHistory).toEqual([]);
+    });
+
+    it("answers 404 for an unknown session, another company, or no company", async () => {
+        await session("mine");
+        await session("theirs", { orgId: "org-2" });
+        await session("none", { orgId: undefined });
+
+        expect((await detail("nope")).status).toBe(404);
+        expect((await detail("theirs")).status).toBe(404);
+        expect((await detail("none")).status).toBe(404);
+    });
+});
+
+describe("POST /api/sessions/:sessionId/settings", () => {
+    const change = (setting: string) => ({
+        settings: { [setting]: true },
+        changedBy: "u1",
+        changes: [{ setting, previousValue: false, newValue: true }],
+    });
+    const save = (sessionId: string, body: unknown) =>
+        post(`/api/sessions/${sessionId}/settings`).send(body as object);
+
+    it("saves the settings and the change", async () => {
+        await session("s");
+
+        const res = await save("s", change("useGzip"));
+
+        expect(res.status).toBe(204);
+        const stored = await row("s");
+        expect(stored.settings).toEqual({ useGzip: true });
+        expect(stored.settingsHistory).toHaveLength(1);
+        expect(stored.settingsHistory[0]).toMatchObject({
+            changedBy: "u1",
+            changes: [{ setting: "useGzip", previousValue: false, newValue: true }],
+        });
+    });
+
+    it("saves the settings but no history entry when nothing changed", async () => {
+        await session("s");
+
+        await save("s", { settings: { useGzip: true }, changes: [] });
+
+        const stored = await row("s");
+        expect(stored.settings).toEqual({ useGzip: true });
+        expect(stored.settingsHistory).toEqual([]);
+    });
+
+    it("keeps the last 10 changes, newest first", async () => {
+        await session("s");
+
+        for (let i = 0; i < 11; i++) {
+            await save("s", change(`setting${i}`));
+        }
+
+        const names = (await row("s")).settingsHistory.map(
+            (entry: any) => entry.changes[0].setting,
+        );
+        expect(names).toHaveLength(10);
+        expect(names[0]).toBe("setting10");
+        expect(names[9]).toBe("setting1");
+    });
+
+    it("leaves updatedAt alone", async () => {
+        await session("s");
+        const before = await row("s");
+
+        await save("s", change("useGzip"));
+
+        expect((await row("s")).updatedAt).toEqual(before.updatedAt);
+    });
+
+    it("answers 404 for an unknown session and 400 with no settings", async () => {
+        await session("s");
+
+        expect((await save("nope", change("useGzip"))).status).toBe(404);
+        expect((await save("s", {})).status).toBe(400);
+    });
+
+    it("keeps starting settings given when the session is created", async () => {
+        await post("/api/sessions/upsert").send({
+            sessionId: "u1",
+            npType: "BAP",
+            settings: { useGzip: false },
+        });
+
+        expect((await row("u1")).settings).toEqual({ useGzip: false });
+    });
+
+    it("keeps saved settings when a later upsert does not send any", async () => {
+        await post("/api/sessions/upsert").send({
+            sessionId: "u1",
+            npType: "BAP",
+            settings: { useGzip: false },
+        });
+
+        await post("/api/sessions/upsert").send({ sessionId: "u1", npType: "BAP" });
+
+        expect((await row("u1")).settings).toEqual({ useGzip: false });
+    });
+});

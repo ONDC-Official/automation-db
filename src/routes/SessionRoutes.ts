@@ -6,6 +6,8 @@ import {
   checkSessionById,
   getSessionScope,
   getPortalSessions,
+  getPortalSession,
+  saveSessionSettings,
   createSession,
   createPayloadForSession,
   getPayloadBySessionId,
@@ -40,6 +42,7 @@ router.get("/subscriber-urls/:userId", getSubscriberUrlsByUserId);
 router.get("/check/:sessionId", checkSessionById);
 router.get("/:sessionId/portal-scope", getSessionScope);
 router.get("/portal/:orgId", getPortalSessions);
+router.get("/portal/:orgId/:sessionId", getPortalSession);
 router.get("/payload/:sessionId", getPayloadBySessionId);
 router.get("/", getAllSessions);
 router.get("/:sessionId", getSessionById);
@@ -53,6 +56,7 @@ router.put("/:sessionId", updateSession);
 
 router.post("/flows/:sessionId", addFlowToSession);
 router.post("/:sessionId/analytics", saveSessionAnalytics);
+router.post("/:sessionId/settings", saveSessionSettings);
 
 router.delete("/:sessionId", deleteSession);
 

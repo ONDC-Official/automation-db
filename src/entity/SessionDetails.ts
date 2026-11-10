@@ -13,6 +13,12 @@ export interface IFlowSummaryEntry {
   completed: number;
 }
 
+export interface ISettingsChange {
+  changedAt: Date;
+  changedBy: string;
+  changes: { setting: string; previousValue: boolean; newValue: boolean }[];
+}
+
 export interface ISessionDetails extends Document {
   sessionId: string;
   npType: string;
@@ -39,6 +45,10 @@ export interface ISessionDetails extends Document {
   result?: SessionResult;
   // Time of the newest message `result` was worked out from.
   resultAsOf?: Date | null;
+  // Validation settings as Workbench names them; live copy is in Redis.
+  settings?: Record<string, boolean> | null;
+  // Newest first, last 10.
+  settingsHistory?: ISettingsChange[];
   createdAt?: Date;
   updatedAt?: Date;
 }
@@ -48,6 +58,22 @@ const FlowSchema = new Schema<IFlow>(
     id: { type: String, required: true },
     status: { type: String, enum: ["PENDING", "COMPLETED"], required: true },
     payloads: [{ type: String }],
+  },
+  { _id: false }
+);
+
+const SettingsChangeSchema = new Schema<ISettingsChange>(
+  {
+    changedAt: { type: Date, required: true },
+    changedBy: { type: String, required: true },
+    changes: [
+      {
+        _id: false,
+        setting: { type: String, required: true },
+        previousValue: { type: Boolean, required: true },
+        newValue: { type: Boolean, required: true },
+      },
+    ],
   },
   { _id: false }
 );
@@ -75,6 +101,8 @@ const SessionDetailsSchema = new Schema<ISessionDetails>(
       default: "incomplete",
     },
     resultAsOf: { type: Date },
+    settings: { type: Schema.Types.Mixed },
+    settingsHistory: [SettingsChangeSchema],
   },
   { timestamps: true }
 );

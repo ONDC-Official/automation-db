@@ -1,8 +1,13 @@
 import { PipelineStage } from "mongoose";
-import { SessionDetails, ISessionDetails } from "../entity/SessionDetails";
+import {
+  SessionDetails,
+  ISessionDetails,
+  ISettingsChange,
+} from "../entity/SessionDetails";
 import { UserModel } from "../entity/User";
 import {
   PORTAL_SESSION_LIMIT,
+  PortalSessionDetailRow,
   PortalSessionQuery,
   PortalSessionRow,
   SESSION_ACTIVE_MS,
@@ -17,6 +22,22 @@ import {
   hostExpr,
   ParsedNpQuery,
 } from "../utils/npFilters";
+
+const PORTAL_SESSION_FIELDS = {
+  _id: 0,
+  sessionId: 1,
+  userId: 1,
+  npType: 1,
+  sessionType: 1,
+  npId: 1,
+  domain: 1,
+  version: 1,
+  usecaseId: 1,
+  result: 1,
+  createdAt: 1,
+  updatedAt: 1,
+  lastActivityAt: 1,
+};
 
 export interface PaginatedSessions {
   data: unknown[];
@@ -909,21 +930,7 @@ export class SessionDetailsRepository {
     if (activity.length) filter.$and = activity;
 
     const rows = await SessionDetails.find(filter)
-      .select({
-        _id: 0,
-        sessionId: 1,
-        userId: 1,
-        npType: 1,
-        sessionType: 1,
-        npId: 1,
-        domain: 1,
-        version: 1,
-        usecaseId: 1,
-        result: 1,
-        createdAt: 1,
-        updatedAt: 1,
-        lastActivityAt: 1,
-      })
+      .select(PORTAL_SESSION_FIELDS)
       .sort({ createdAt: -1 })
       .limit(PORTAL_SESSION_LIMIT + 1)
       .lean()
@@ -932,6 +939,43 @@ export class SessionDetailsRepository {
       sessions: rows.slice(0, PORTAL_SESSION_LIMIT) as PortalSessionRow[],
       hasMore: rows.length > PORTAL_SESSION_LIMIT,
     };
+  }
+
+  // One session of an organisation, in full, for the NP Portal API
+  async findPortalSession(orgId: string, sessionId: string) {
+    return SessionDetails.findOne({ orgId, sessionId })
+      .select({
+        ...PORTAL_SESSION_FIELDS,
+        orgId: 1,
+        reportExists: 1,
+        settings: 1,
+        settingsHistory: 1,
+      })
+      .lean()
+      .exec() as Promise<PortalSessionDetailRow | null>;
+  }
+
+  // Saves the current settings and, if any changed, the newest of the last 10
+  // changes. Left out of updatedAt, as the caller's session update already sets it.
+  async saveSettings(
+    sessionId: string,
+    settings: Record<string, boolean>,
+    change?: ISettingsChange,
+  ) {
+    return SessionDetails.updateOne(
+      { sessionId },
+      {
+        $set: { settings },
+        ...(change
+          ? {
+              $push: {
+                settingsHistory: { $each: [change], $position: 0, $slice: 10 },
+              },
+            }
+          : {}),
+      },
+      { timestamps: false },
+    ).exec();
   }
 
   // Saves what the newest message changed. Left out of updatedAt on purpose, and
@@ -1069,6 +1113,7 @@ export class SessionDetailsRepository {
       version?: string;
       usecaseId?: string;
       flowMap?: any;
+      settings?: Record<string, boolean>;
     },
   ) {
     const sessionDetail: any = await SessionDetails.findOne({

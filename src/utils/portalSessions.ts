@@ -70,6 +70,13 @@ export interface PortalSessionRow {
     lastActivityAt?: Date | null;
 }
 
+export interface PortalSessionDetailRow extends PortalSessionRow {
+    orgId: string;
+    reportExists?: boolean;
+    settings?: Record<string, boolean> | null;
+    settingsHistory?: unknown[];
+}
+
 /** A row is only missing these until the fill-in script has run. */
 export function toPortalSession(row: PortalSessionRow, now = Date.now()) {
     const { updatedAt, ...session } = row;
@@ -82,5 +89,24 @@ export function toPortalSession(row: PortalSessionRow, now = Date.now()) {
             lastActivityAt && now - lastActivityAt.getTime() <= SESSION_ACTIVE_MS
                 ? "active"
                 : "expired",
+    };
+}
+
+export function toPortalSessionDetail(
+    row: PortalSessionDetailRow,
+    flowSummary: unknown[],
+    now = Date.now(),
+) {
+    const session = toPortalSession(row, now);
+    return {
+        ...session,
+        expiresAt:
+            session.status === "active" && session.lastActivityAt
+                ? new Date(session.lastActivityAt.getTime() + SESSION_ACTIVE_MS)
+                : null,
+        reportExists: row.reportExists === true,
+        flowSummary,
+        settings: row.settings ?? null,
+        settingsHistory: row.settingsHistory ?? [],
     };
 }

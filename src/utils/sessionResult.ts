@@ -72,6 +72,20 @@ export function stepStates(flow: BuildFlow, messages: SavedMessage[]): StepState
     });
 }
 
+/** One flow's counts from its latest try. Messages must be oldest first. */
+export function flowSummary(flow: BuildFlow, messages: SavedMessage[]) {
+    const own = messages.filter((m) => m.flowId === flow.flowId);
+    const attempt = latestTry(own);
+    const states = attempt.length ? stepStates(flow, attempt) : [];
+    return {
+        flowId: flow.flowId,
+        totalSteps: flow.steps.length,
+        passedSteps: states.filter((state) => state === "passed").length,
+        failedSteps: states.filter((state) => state === "failed").length,
+        transactionIds: [...new Set(own.flatMap((m) => m.transactionId ?? []))],
+    };
+}
+
 /** Messages must be oldest first. */
 export function sessionResult(
     build: BuildFlow[],
