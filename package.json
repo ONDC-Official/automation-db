@@ -14,7 +14,6 @@
         "test:types": "tsc -p tsconfig.test.json",
         "backfill:reports": "ts-node src/scripts/backfill-reports.ts",
         "backfill:flowmap": "ts-node src/scripts/backfill-flowmap.ts",
-        "backfill:portal-activity": "ts-node src/scripts/backfill-portal-activity.ts",
         "typeorm": "typeorm-ts-node-commonjs",
         "migration:generate": "npm run typeorm migration:generate -- ./src/migration/ -d ./src/data-source.ts",
         "migration:run": "npm run typeorm migration:run -- -d ./src/data-source.ts",

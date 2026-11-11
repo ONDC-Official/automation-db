@@ -3,7 +3,6 @@ import mongoose from "mongoose";
 import { useApi } from "../helpers/api";
 import { payloadData, seedPayload, seedSession } from "../factories";
 import { SessionDetails } from "../../entity/SessionDetails";
-import { runPortalActivityBackfill } from "../../scripts/backfill-portal-activity";
 
 /** The NP Portal session list and the activity data behind it. */
 
@@ -279,65 +278,6 @@ describe("activity recording", () => {
         });
 
         expect((await row("s")).result).toBe("passed");
-    });
-});
-
-describe("portal activity backfill", () => {
-    const old = () =>
-        SessionDetails.collection.updateOne(
-            { sessionId: "s" },
-            { $unset: { lastActivityAt: "", resultAsOf: "", result: "", flowIds: "" } },
-        );
-
-    it("writes nothing on a dry run", async () => {
-        await session("s");
-        await old();
-
-        const tally = await runPortalActivityBackfill({ apply: false });
-
-        expect(tally).toEqual({ sessions: 1, failed: 0 });
-        expect((await row("s")).lastActivityAt).toBeUndefined();
-    });
-
-    it("fills in sessions with an organisation and can run again", async () => {
-        await seedFlow("A", "search");
-        await session("s");
-        await session("no-org", { orgId: undefined, lastActivityAt: undefined });
-        await old();
-        const message = await seedPayload({
-            sessionId: "s",
-            action: "SEARCH",
-            flowId: "A",
-            ...reply("ACK"),
-        });
-        const updatedAt = (await row("s")).updatedAt;
-
-        await runPortalActivityBackfill({ apply: true });
-        await runPortalActivityBackfill({ apply: true });
-
-        const filled = await row("s");
-        expect(filled.flowIds).toEqual(["A"]);
-        expect(filled.result).toBe("passed");
-        expect(filled.lastActivityAt.getTime()).toBe(
-            Math.max(updatedAt.getTime(), message.createdAt.getTime()),
-        );
-        expect(filled.updatedAt).toEqual(updatedAt);
-        expect((await row("no-org")).lastActivityAt).toBeUndefined();
-    });
-
-    it("uses updatedAt for a session with no messages", async () => {
-        await session("s");
-        await old();
-        const { updatedAt } = await row("s");
-
-        await runPortalActivityBackfill({ apply: true });
-
-        const filled = await row("s");
-        expect(filled.lastActivityAt).toEqual(updatedAt);
-        const stored = await SessionDetails.collection.findOne({ sessionId: "s" });
-        expect(stored?.result).toBe("incomplete");
-        expect(stored?.flowIds).toEqual([]);
-        expect(ids(await list("?result=incomplete"))).toEqual(["s"]);
     });
 });
 
