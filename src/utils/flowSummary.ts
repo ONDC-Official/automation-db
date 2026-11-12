@@ -1,11 +1,10 @@
 /**
- * A session's overall result for the NP Portal API, from its saved messages.
+ * Per-flow step counts for the NP Portal session API, from saved messages.
  *
  * Saved messages do not record which step they belong to, so steps are matched by
  * action, in order. Form submissions are not saved at all.
  */
 
-export type SessionResult = "passed" | "failed" | "incomplete";
 export type StepState = "passed" | "failed" | "not_run";
 
 export interface SavedMessage {
@@ -25,12 +24,6 @@ export interface BuildFlow {
 
 const isForm = (api: string): boolean =>
     api === "html_form" || api === "dynamic_form";
-
-/**
- * Which flows must pass for a session to be `passed`: every flow of its build,
- * run or not, because the contract lists flows that have not run yet.
- */
-export const flowsCountedForPassed = (build: BuildFlow[]): BuildFlow[] => build;
 
 /**
  * A technical cancellation tests an `on_confirm` that arrives too late, so its NACK
@@ -84,21 +77,4 @@ export function flowSummary(flow: BuildFlow, messages: SavedMessage[]) {
         failedSteps: states.filter((state) => state === "failed").length,
         transactionIds: [...new Set(own.flatMap((m) => m.transactionId ?? []))],
     };
-}
-
-/** Messages must be oldest first. */
-export function sessionResult(
-    build: BuildFlow[],
-    messages: SavedMessage[],
-): SessionResult {
-    const flows = flowsCountedForPassed(build);
-    if (!flows.length) return "incomplete";
-
-    const states = flows.flatMap((flow): StepState[] => {
-        const attempt = latestTry(messages.filter((m) => m.flowId === flow.flowId));
-        return attempt.length ? stepStates(flow, attempt) : ["not_run"];
-    });
-
-    if (states.includes("failed")) return "failed";
-    return states.includes("not_run") ? "incomplete" : "passed";
 }

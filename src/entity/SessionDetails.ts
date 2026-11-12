@@ -1,6 +1,5 @@
 import { Schema, model, Document } from "mongoose";
 import { SessionType } from "./ActionEnums";
-import { SessionResult } from "../utils/sessionResult";
 
 export interface IFlow {
   id: string;
@@ -41,10 +40,6 @@ export interface ISessionDetails extends Document {
   lastActivityAt?: Date | null;
   // Flows with a saved message; flows[] does not record this.
   flowIds?: string[];
-  // Latest-try outcome, unlike flowMap's report verdicts.
-  result?: SessionResult;
-  // Time of the newest message `result` was worked out from.
-  resultAsOf?: Date | null;
   // Validation settings as Workbench names them; live copy is in Redis.
   settings?: Record<string, boolean> | null;
   // Newest first, last 10.
@@ -95,12 +90,6 @@ const SessionDetailsSchema = new Schema<ISessionDetails>(
     flowMap: { type: Schema.Types.Mixed, default: null },
     lastActivityAt: { type: Date },
     flowIds: [{ type: String }],
-    result: {
-      type: String,
-      enum: ["passed", "failed", "incomplete"],
-      default: "incomplete",
-    },
-    resultAsOf: { type: Date },
     settings: { type: Schema.Types.Mixed },
     settingsHistory: [SettingsChangeSchema],
   },

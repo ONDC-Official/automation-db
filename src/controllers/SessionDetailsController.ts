@@ -443,7 +443,7 @@ export const createPayloadForSession = async (req: Request, res: Response) => {
     res.status(201).json(newPayload);
     // After the reply, so a failure here can never affect the saved message.
     sessionDetailsService
-      .refreshMessageActivity(payloadData.sessionId)
+      .recordMessageActivity(payloadData.sessionId, newPayload)
       .catch((error) =>
         logger.error(`Error updating activity of session ${payloadData.sessionId}`, error)
       );

@@ -19,8 +19,8 @@ export class PayloadRepository {
 		return Payload.find({ sessionId: sessionId });
 	}
 
-	// What working out a session's result needs, oldest first, without the bodies
-	async findResultFields(sessionId: string) {
+	// What a session's flow summary needs, oldest first, without the bodies
+	async findSummaryFields(sessionId: string) {
 		return Payload.find({ sessionId })
 			.select({
 				flowId: 1,

@@ -12,7 +12,6 @@ import {
   PortalSessionRow,
   SESSION_ACTIVE_MS,
 } from "../utils/portalSessions";
-import { SessionResult } from "../utils/sessionResult";
 import {
   buildSessionPipeline,
   ParsedSessionQuery,
@@ -33,7 +32,7 @@ const PORTAL_SESSION_FIELDS = {
   domain: 1,
   version: 1,
   usecaseId: 1,
-  result: 1,
+  reportExists: 1,
   createdAt: 1,
   updatedAt: 1,
   lastActivityAt: 1,
@@ -891,13 +890,14 @@ export class SessionDetailsRepository {
     const anyOf = (field: string, values?: string[]) => {
       if (values?.length) filter[field] = { $in: values };
     };
-    anyOf("result", query.results);
     anyOf("userId", query.userIds);
     anyOf("domain", query.domains);
     anyOf("version", query.versions);
     anyOf("usecaseId", query.usecaseIds);
     anyOf("npId", query.npIds);
     anyOf("flowIds", query.flowIds);
+    if (query.reportExists === true) filter.reportExists = true;
+    if (query.reportExists === false) filter.reportExists = { $ne: true };
     if (query.npType) filter.npType = query.npType;
     if (query.sessionType) filter.sessionType = query.sessionType;
     if (query.q) {
@@ -947,7 +947,6 @@ export class SessionDetailsRepository {
       .select({
         ...PORTAL_SESSION_FIELDS,
         orgId: 1,
-        reportExists: 1,
         settings: 1,
         settingsHistory: 1,
       })
@@ -978,24 +977,19 @@ export class SessionDetailsRepository {
     ).exec();
   }
 
-  // Saves what the newest message changed. Left out of updatedAt on purpose, and
-  // skipped when a newer message already got here first.
+  // Records one saved message on its session, in a single write: its flow and
+  // time. Only sessions of an organisation, the only ones the NP Portal lists.
+  // $max keeps a message that arrives late from moving the time back. Left out
+  // of updatedAt on purpose: the business dashboards sort and export by it.
   async saveMessageActivity(
     sessionId: string,
-    data: { at: Date; flowIds: string[]; result: SessionResult },
+    data: { at: Date; flowId?: string | null },
   ) {
     return SessionDetails.updateOne(
+      { sessionId, orgId: { $nin: [null, ""] } },
       {
-        sessionId,
-        $or: [{ resultAsOf: null }, { resultAsOf: { $lte: data.at } }],
-      },
-      {
-        $set: {
-          flowIds: data.flowIds,
-          result: data.result,
-          resultAsOf: data.at,
-        },
         $max: { lastActivityAt: data.at },
+        ...(data.flowId ? { $addToSet: { flowIds: data.flowId } } : {}),
       },
       { timestamps: false },
     ).exec();

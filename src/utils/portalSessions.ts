@@ -1,5 +1,3 @@
-import { SessionResult } from "./sessionResult";
-
 /** Sessions expire this long after their last activity. */
 export const SESSION_ACTIVE_MS = 4 * 24 * 60 * 60 * 1000;
 
@@ -20,7 +18,7 @@ const asText = (value: unknown): string | undefined =>
 export interface PortalSessionQuery {
     q?: string;
     status?: string;
-    results?: string[];
+    reportExists?: boolean;
     userIds?: string[];
     domains?: string[];
     versions?: string[];
@@ -40,7 +38,8 @@ export const parsePortalSessionQuery = (
 ): PortalSessionQuery => ({
     q: asText(query.q),
     status: asText(query.status),
-    results: asList(query.result),
+    reportExists:
+        query.reportExists === "true" ? true : query.reportExists === "false" ? false : undefined,
     userIds: asList(query.userId),
     domains: asList(query.domain),
     versions: asList(query.version),
@@ -64,7 +63,7 @@ export interface PortalSessionRow {
     domain?: string | null;
     version?: string | null;
     usecaseId?: string | null;
-    result?: SessionResult;
+    reportExists?: boolean;
     createdAt?: Date;
     updatedAt?: Date;
     lastActivityAt?: Date | null;
@@ -72,19 +71,18 @@ export interface PortalSessionRow {
 
 export interface PortalSessionDetailRow extends PortalSessionRow {
     orgId: string;
-    reportExists?: boolean;
     settings?: Record<string, boolean> | null;
     settingsHistory?: unknown[];
 }
 
-/** A row is only missing these until the fill-in script has run. */
+/** Sessions made before the Portal API have no lastActivityAt, so updatedAt stands in. */
 export function toPortalSession(row: PortalSessionRow, now = Date.now()) {
     const { updatedAt, ...session } = row;
     const lastActivityAt = row.lastActivityAt ?? updatedAt;
     return {
         ...session,
         lastActivityAt,
-        result: row.result ?? "incomplete",
+        reportExists: row.reportExists === true,
         status:
             lastActivityAt && now - lastActivityAt.getTime() <= SESSION_ACTIVE_MS
                 ? "active"
@@ -104,7 +102,6 @@ export function toPortalSessionDetail(
             session.status === "active" && session.lastActivityAt
                 ? new Date(session.lastActivityAt.getTime() + SESSION_ACTIVE_MS)
                 : null,
-        reportExists: row.reportExists === true,
         flowSummary,
         settings: row.settings ?? null,
         settingsHistory: row.settingsHistory ?? [],

@@ -4,9 +4,8 @@ import {
     SavedMessage,
     flowSummary,
     latestTry,
-    sessionResult,
     stepStates,
-} from "../../utils/sessionResult";
+} from "../../utils/flowSummary";
 
 let id = 0;
 const msg = (action: string, ack: string | null = "ACK", extra: Partial<SavedMessage> = {}) => ({
@@ -111,70 +110,6 @@ describe("latestTry", () => {
 
         expect(latestTry([first, second])).toEqual([second]);
         expect(latestTry([first, second, lateFromFirst])).toEqual([second]);
-    });
-});
-
-describe("sessionResult", () => {
-    it("is passed when every flow of the build passed every step", () => {
-        expect(sessionResult([flowA], [msg("SEARCH"), msg("ON_SEARCH")])).toBe("passed");
-    });
-
-    it("is failed when any flow has a failed step, even if others have not run", () => {
-        const flowB = { flowId: "B", steps: ["select"] };
-        expect(sessionResult([flowA, flowB], [msg("SEARCH", "NACK")])).toBe("failed");
-    });
-
-    it("is incomplete when a step has not run", () => {
-        expect(sessionResult([flowA], [msg("SEARCH")])).toBe("incomplete");
-    });
-
-    it("is incomplete when a flow of the build never ran", () => {
-        const flowB = { flowId: "B", steps: ["select"] };
-        expect(sessionResult([flowA, flowB], [msg("SEARCH"), msg("ON_SEARCH")])).toBe(
-            "incomplete",
-        );
-    });
-
-    it("is incomplete with no flows or no messages", () => {
-        expect(sessionResult([], [msg("SEARCH")])).toBe("incomplete");
-        expect(sessionResult([flowA], [])).toBe("incomplete");
-    });
-
-    it("forgives a failure that a later retry passed", () => {
-        expect(
-            sessionResult([flowA], [
-                msg("SEARCH", "NACK", { transactionId: "t1" }),
-                msg("SEARCH", "ACK", { transactionId: "t2" }),
-                msg("ON_SEARCH", "ACK", { transactionId: "t2" }),
-            ]),
-        ).toBe("passed");
-    });
-
-    it("passes a finished technical cancellation despite its on_confirm NACK", () => {
-        const flow = { flowId: "TECHNICAL_CANCELLATION_FLOW", steps: ["on_confirm", "cancel"] };
-        const extra = { flowId: flow.flowId };
-
-        expect(
-            sessionResult([flow], [msg("ON_CONFIRM", "NACK", extra), msg("CANCEL", "ACK", extra)]),
-        ).toBe("passed");
-    });
-
-    it("stays incomplete if a technical cancellation stops at the NACK", () => {
-        const flow = { flowId: "TECHNICAL_CANCELLATION_FLOW", steps: ["on_confirm", "cancel"] };
-
-        expect(sessionResult([flow], [msg("ON_CONFIRM", "NACK", { flowId: flow.flowId })])).toBe(
-            "incomplete",
-        );
-    });
-
-    it("passes a flow that ends on a form once its other steps pass", () => {
-        const flow = { flowId: "A", steps: ["search", "html_form"] };
-
-        expect(sessionResult([flow], [msg("SEARCH")])).toBe("passed");
-    });
-
-    it("does not treat a flow made only of forms as passed before it runs", () => {
-        expect(sessionResult([{ flowId: "F", steps: ["html_form"] }], [])).toBe("incomplete");
     });
 });
 

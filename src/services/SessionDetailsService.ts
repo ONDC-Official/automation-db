@@ -14,7 +14,7 @@ import {
   toPortalSession,
   toPortalSessionDetail,
 } from "../utils/portalSessions";
-import { flowSummary, SavedMessage, sessionResult } from "../utils/sessionResult";
+import { flowSummary, SavedMessage } from "../utils/flowSummary";
 import { ProtocolService } from "./ProtocolService";
 import { ISettingsChange, SessionDetails } from "../entity/SessionDetails";
 import { Payload } from "../entity/Payload";
@@ -45,26 +45,26 @@ export class SessionDetailsService {
     const row = await this.sessionRepo.findPortalSession(orgId, sessionId);
     if (!row) return null;
 
-    const { messages, build } = await this.loadResultInputs(sessionId, row);
+    const { messages, build } = await this.loadSummaryInputs(sessionId, row);
     return toPortalSessionDetail(
       row,
       build.map((flow) => flowSummary(flow, messages)),
     );
   }
 
-  private async loadResultInputs(
+  private async loadSummaryInputs(
     sessionId: string,
     session: { domain?: string | null; version?: string | null; usecaseId?: string | null },
   ) {
     const [rows, build] = await Promise.all([
-      this.payloadRepo.findResultFields(sessionId),
+      this.payloadRepo.findSummaryFields(sessionId),
       new ProtocolService().listBuildFlows(
         String(session.domain),
         String(session.version),
         String(session.usecaseId),
       ),
     ]);
-    const messages: (SavedMessage & { createdAt?: Date })[] = rows.map((row: any) => ({
+    const messages: SavedMessage[] = rows.map((row: any) => ({
       ...row,
       ack: row.jsonResponse?.response?.message?.ack?.status,
     }));
@@ -72,22 +72,17 @@ export class SessionDetailsService {
   }
 
   /**
-   * Brings a session's last activity, flows and result up to date with its saved
-   * messages. Only sessions with an organisation can appear in the NP Portal list,
-   * so the rest are skipped to keep this off their message path.
+   * Updates a session's last activity and flows from one saved message. Uses only
+   * the message itself, so it reads nothing.
    */
-  async refreshMessageActivity(sessionId: string): Promise<void> {
-    const session = await this.sessionRepo.findSessionScope(sessionId);
-    if (!session?.orgId) return;
-
-    const { messages, build } = await this.loadResultInputs(sessionId, session);
-    const newest = messages.at(-1);
-    if (!newest?.createdAt) return;
-
+  async recordMessageActivity(
+    sessionId: string | null | undefined,
+    message: { flowId?: string | null; createdAt?: Date },
+  ): Promise<void> {
+    if (!sessionId || !message.createdAt) return;
     await this.sessionRepo.saveMessageActivity(sessionId, {
-      at: newest.createdAt,
-      flowIds: [...new Set(messages.flatMap((m) => m.flowId ?? []))],
-      result: sessionResult(build, messages),
+      at: message.createdAt,
+      flowId: message.flowId,
     });
   }
 

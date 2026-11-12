@@ -116,7 +116,7 @@ describe("GET /api/sessions/portal/:orgId", () => {
     });
 
     it.each([
-        ["result=failed", { result: "failed" }],
+        ["reportExists=true", { reportExists: true }],
         ["userId=u9", { userId: "u9" }],
         ["version=9.9.9", { version: "9.9.9" }],
         ["usecaseId=F%26B", { usecaseId: "F&B" }],
@@ -128,6 +128,14 @@ describe("GET /api/sessions/portal/:orgId", () => {
         await session("miss");
 
         expect(ids(await list(`?${query}`))).toEqual(["hit"]);
+    });
+
+    it("treats reportExists=false as no report, including older sessions", async () => {
+        await session("with", { reportExists: true });
+        await session("without", { reportExists: false });
+
+        expect(ids(await list("?reportExists=false"))).toEqual(["without"]);
+        expect(ids(await list("?reportExists=maybe"))).toEqual(["with", "without"]);
     });
 
     it("treats the from time as inclusive and the to time as exclusive", async () => {
@@ -168,7 +176,7 @@ describe("GET /api/sessions/portal/:orgId", () => {
                 "lastActivityAt",
                 "npId",
                 "npType",
-                "result",
+                "reportExists",
                 "sessionId",
                 "sessionType",
                 "status",
@@ -199,46 +207,47 @@ describe("activity recording", () => {
         expect((await row("u1")).lastActivityAt).toBeInstanceOf(Date);
     });
 
-    it("updates activity, flows and result when a message is saved", async () => {
-        await seedFlow("A", "search", "on_search");
+    it("updates activity and flows when a message is saved", async () => {
         await session("s", { lastActivityAt: ago(9 * DAY) });
         const before = await row("s");
 
         expect((await saveMessage("s", "SEARCH")).status).toBe(201);
-        await vi.waitFor(async () =>
-            expect((await row("s")).flowIds).toEqual(["A"]),
-        );
-        expect((await row("s")).result).toBe("incomplete");
+        await vi.waitFor(async () => expect((await row("s")).flowIds).toEqual(["A"]));
         expect((await row("s")).lastActivityAt.getTime()).toBeGreaterThan(
             before.lastActivityAt.getTime(),
         );
 
         await saveMessage("s", "ON_SEARCH");
-        await vi.waitFor(async () => expect((await row("s")).result).toBe("passed"));
+        await saveMessage("s", "SELECT", "ACK", "B");
+        await vi.waitFor(async () => expect((await row("s")).flowIds).toEqual(["A", "B"]));
     });
 
-    it("marks a session failed on a NACK", async () => {
-        await seedFlow("A", "search", "on_search");
+    it("works from the saved message alone, reading nothing", async () => {
         await session("s");
+        const findOne = vi.spyOn(SessionDetails, "findOne");
+        const find = vi.spyOn(SessionDetails, "find");
 
-        await saveMessage("s", "SEARCH", "NACK");
+        await saveMessage("s", "SEARCH");
+        await new Promise((resolve) => setTimeout(resolve, 50));
+        const reads = findOne.mock.calls.length + find.mock.calls.length;
+        findOne.mockRestore();
+        find.mockRestore();
 
-        await vi.waitFor(async () => expect((await row("s")).result).toBe("failed"));
+        expect(reads).toBe(0);
+        expect((await row("s")).flowIds).toEqual(["A"]);
     });
 
     it("leaves updatedAt alone, because the dashboard reads it", async () => {
-        await seedFlow("A", "search");
         await session("s");
         const before = await row("s");
 
         await saveMessage("s", "SEARCH");
-        await vi.waitFor(async () => expect((await row("s")).result).toBe("passed"));
+        await vi.waitFor(async () => expect((await row("s")).flowIds).toEqual(["A"]));
 
         expect((await row("s")).updatedAt).toEqual(before.updatedAt);
     });
 
     it("skips sessions with no organisation", async () => {
-        await seedFlow("A", "search");
         await session("s", { orgId: undefined, lastActivityAt: undefined });
 
         await saveMessage("s", "SEARCH");
@@ -253,7 +262,6 @@ describe("activity recording", () => {
             .mockImplementation(() => {
                 throw new Error("database down");
             });
-        await seedFlow("A", "search");
         await session("s");
 
         const res = await saveMessage("s", "SEARCH");
@@ -265,19 +273,21 @@ describe("activity recording", () => {
         expect((await row("s")).flowIds).toEqual([]);
     });
 
-    it("does not let an older result overwrite a newer one", async () => {
-        await session("s", { resultAsOf: new Date(), result: "passed" });
+    it("does not move last activity back for a message that arrives late", async () => {
+        const now = new Date();
+        await session("s", { lastActivityAt: now });
         const { SessionDetailsRepository } = await import(
             "../../repositories/SessionDetailsRepository"
         );
 
         await new SessionDetailsRepository().saveMessageActivity("s", {
             at: ago(DAY),
-            flowIds: ["A"],
-            result: "failed",
+            flowId: "A",
         });
 
-        expect((await row("s")).result).toBe("passed");
+        const saved = await row("s");
+        expect(saved.lastActivityAt).toEqual(now);
+        expect(saved.flowIds).toEqual(["A"]);
     });
 });
 
