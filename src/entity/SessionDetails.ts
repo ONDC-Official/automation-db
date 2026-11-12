@@ -12,6 +12,12 @@ export interface IFlowSummaryEntry {
   completed: number;
 }
 
+export interface ISettingsChange {
+  changedAt: Date;
+  changedBy: string;
+  changes: { setting: string; previousValue: boolean; newValue: boolean }[];
+}
+
 export interface ISessionDetails extends Document {
   sessionId: string;
   npType: string;
@@ -30,6 +36,14 @@ export interface ISessionDetails extends Document {
   flowSummary?: Record<string, IFlowSummaryEntry> | null;
   // flowMap: per-flow pass/fail result — nullable for the same reason.
   flowMap?: Record<string, "PASS" | "FAIL"> | null;
+  // NP Portal API. Separate from updatedAt, which the dashboard sorts and exports.
+  lastActivityAt?: Date | null;
+  // Flows with a saved message; flows[] does not record this.
+  flowIds?: string[];
+  // Validation settings as Workbench names them; live copy is in Redis.
+  settings?: Record<string, boolean> | null;
+  // Newest first, last 10.
+  settingsHistory?: ISettingsChange[];
   createdAt?: Date;
   updatedAt?: Date;
 }
@@ -39,6 +53,22 @@ const FlowSchema = new Schema<IFlow>(
     id: { type: String, required: true },
     status: { type: String, enum: ["PENDING", "COMPLETED"], required: true },
     payloads: [{ type: String }],
+  },
+  { _id: false }
+);
+
+const SettingsChangeSchema = new Schema<ISettingsChange>(
+  {
+    changedAt: { type: Date, required: true },
+    changedBy: { type: String, required: true },
+    changes: [
+      {
+        _id: false,
+        setting: { type: String, required: true },
+        previousValue: { type: Boolean, required: true },
+        newValue: { type: Boolean, required: true },
+      },
+    ],
   },
   { _id: false }
 );
@@ -58,6 +88,10 @@ const SessionDetailsSchema = new Schema<ISessionDetails>(
     reportExists: { type: Boolean, default: false },
     flowSummary: { type: Schema.Types.Mixed, default: null },
     flowMap: { type: Schema.Types.Mixed, default: null },
+    lastActivityAt: { type: Date },
+    flowIds: [{ type: String }],
+    settings: { type: Schema.Types.Mixed },
+    settingsHistory: [SettingsChangeSchema],
   },
   { timestamps: true }
 );
@@ -72,6 +106,10 @@ SessionDetailsSchema.index({ sessionId: 1 });
 SessionDetailsSchema.index({ userId: 1 });
 // Lists an organisation's sessions, newest first (NP Portal APIs).
 SessionDetailsSchema.index({ orgId: 1, createdAt: -1 });
+// The NP Portal list's common filters, its activity filters and its flow filter.
+SessionDetailsSchema.index({ orgId: 1, npId: 1, npType: 1, domain: 1, createdAt: -1 });
+SessionDetailsSchema.index({ orgId: 1, lastActivityAt: -1 });
+SessionDetailsSchema.index({ orgId: 1, flowIds: 1 });
 SessionDetailsSchema.index({ npId: 1 });
 SessionDetailsSchema.index({ domain: 1 });
 SessionDetailsSchema.index({ version: 1 });

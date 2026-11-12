@@ -9,7 +9,14 @@ import {
 import { PayloadRepository } from "../repositories/PayloadRepository";
 import { ParsedSessionQuery } from "../utils/sessionFilters";
 import { ParsedNpQuery } from "../utils/npFilters";
-import { SessionDetails } from "../entity/SessionDetails";
+import {
+  PortalSessionQuery,
+  toPortalSession,
+  toPortalSessionDetail,
+} from "../utils/portalSessions";
+import { flowSummary, SavedMessage } from "../utils/flowSummary";
+import { ProtocolService } from "./ProtocolService";
+import { ISettingsChange, SessionDetails } from "../entity/SessionDetails";
 import { Payload } from "../entity/Payload";
 import { PayloadDetailsDTO } from "../entity/PayloadDetailsDTO";
 import logger from "@ondc/automation-logger";
@@ -26,6 +33,72 @@ export class SessionDetailsService {
   constructor(sessionRepo: SessionDetailsRepository, payloadRepo: PayloadRepository) {
     this.sessionRepo = sessionRepo;
     this.payloadRepo = payloadRepo;
+  }
+
+  async listPortalSessions(orgId: string, query: PortalSessionQuery) {
+    const { sessions, hasMore } = await this.sessionRepo.findPortalSessions(orgId, query);
+    return { sessions: sessions.map((row) => toPortalSession(row)), hasMore };
+  }
+
+  /** The session of that organisation, or null if it has no such session. */
+  async getPortalSession(orgId: string, sessionId: string) {
+    const row = await this.sessionRepo.findPortalSession(orgId, sessionId);
+    if (!row) return null;
+
+    const { messages, build } = await this.loadSummaryInputs(sessionId, row);
+    return toPortalSessionDetail(
+      row,
+      build.map((flow) => flowSummary(flow, messages)),
+    );
+  }
+
+  private async loadSummaryInputs(
+    sessionId: string,
+    session: { domain?: string | null; version?: string | null; usecaseId?: string | null },
+  ) {
+    const [rows, build] = await Promise.all([
+      this.payloadRepo.findSummaryFields(sessionId),
+      new ProtocolService().listBuildFlows(
+        String(session.domain),
+        String(session.version),
+        String(session.usecaseId),
+      ),
+    ]);
+    const messages: SavedMessage[] = rows.map((row: any) => ({
+      ...row,
+      ack: row.jsonResponse?.response?.message?.ack?.status,
+    }));
+    return { messages, build };
+  }
+
+  /**
+   * Updates a session's last activity and flows from one saved message. Uses only
+   * the message itself, so it reads nothing.
+   */
+  async recordMessageActivity(
+    sessionId: string | null | undefined,
+    message: { flowId?: string | null; createdAt?: Date },
+  ): Promise<void> {
+    if (!sessionId || !message.createdAt) return;
+    await this.sessionRepo.saveMessageActivity(sessionId, {
+      at: message.createdAt,
+      flowId: message.flowId,
+    });
+  }
+
+  /** Whether the session exists. A change with no entries is not recorded. */
+  async saveSessionSettings(
+    sessionId: string,
+    settings: Record<string, boolean>,
+    changedBy: string | undefined,
+    changes: ISettingsChange["changes"],
+  ): Promise<boolean> {
+    const change =
+      changedBy && changes.length
+        ? { changedAt: new Date(), changedBy, changes }
+        : undefined;
+    const { matchedCount } = await this.sessionRepo.saveSettings(sessionId, settings, change);
+    return matchedCount > 0;
   }
 
   async getAllSessions(): Promise<InstanceType<typeof SessionDetails>[]> {
@@ -130,6 +203,10 @@ export class SessionDetailsService {
       logger.error(`Error retrieving sessions for userId: ${userId}`, error);
       throw new Error("Error retrieving sessions by user");
     }
+  }
+
+  async getSessionScope(sessionId: string) {
+    return this.sessionRepo.findSessionScope(sessionId);
   }
 
   async checkSessionById(sessionId: string): Promise<boolean> {
@@ -307,6 +384,7 @@ export class SessionDetailsService {
       version?: string;
       usecaseId?: string;
       flowMap?:string;
+      settings?: Record<string, boolean>;
     }
   ) {
     try {
