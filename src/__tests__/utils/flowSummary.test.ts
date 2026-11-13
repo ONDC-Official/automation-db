@@ -1,25 +1,24 @@
 import { describe, expect, it } from "vitest";
+import { IFlowRunStep } from "../../entity/SessionDetails";
 import {
     BuildFlow,
-    SavedMessage,
+    MAX_RUN_STEPS,
     flowSummary,
-    latestTry,
     stepStates,
+    toFlowRunSteps,
 } from "../../utils/flowSummary";
 
 let id = 0;
-const msg = (action: string, ack: string | null = "ACK", extra: Partial<SavedMessage> = {}) => ({
+const msg = (action: string, ack: string | null = "ACK", extra: Partial<IFlowRunStep> = {}) => ({
     action,
-    ack,
+    ack: ack ?? "",
     messageId: `m-${++id}`,
-    flowId: "A",
-    transactionId: "t1",
     ...extra,
 });
 
 const flowA: BuildFlow = { flowId: "A", steps: ["search", "on_search"] };
 
-const states = (steps: string[], messages: SavedMessage[], flowId = "A") =>
+const states = (steps: string[], messages: IFlowRunStep[], flowId = "A") =>
     stepStates({ flowId, steps }, messages);
 
 describe("stepStates", () => {
@@ -102,25 +101,59 @@ describe("stepStates", () => {
     });
 });
 
-describe("latestTry", () => {
-    it("keeps only the transaction that started last", () => {
-        const first = msg("SEARCH", "NACK", { transactionId: "t1" });
-        const second = msg("SEARCH", "ACK", { transactionId: "t2" });
-        const lateFromFirst = msg("ON_SEARCH", "ACK", { transactionId: "t1" });
+describe("toFlowRunSteps", () => {
+    it("keeps action, message ID and ACK/NACK of each call, in order", () => {
+        expect(
+            toFlowRunSteps([
+                { action: " search ", messageId: " m1 ", ack: "ack", extra: "dropped" },
+                { action: "on_search", messageId: "m1", ack: "NACK" },
+                { action: "select" },
+            ]),
+        ).toEqual([
+            { action: "search", messageId: "m1", ack: "ACK" },
+            { action: "on_search", messageId: "m1", ack: "NACK" },
+            { action: "select", messageId: "", ack: "" },
+        ]);
+    });
 
-        expect(latestTry([first, second])).toEqual([second]);
-        expect(latestTry([first, second, lateFromFirst])).toEqual([second]);
+    it("drops entries with no action and anything that is not an entry", () => {
+        expect(
+            toFlowRunSteps([null, "x", 7, [], { messageId: "m" }, { action: "  " }, { action: 5 }, { action: "init" }]),
+        ).toEqual([{ action: "init", messageId: "", ack: "" }]);
+    });
+
+    it("turns non-text values into empty text", () => {
+        expect(toFlowRunSteps([{ action: "init", messageId: { $gt: "" }, ack: 1 }])).toEqual([
+            { action: "init", messageId: "", ack: "" },
+        ]);
+    });
+
+    it(`keeps at most ${MAX_RUN_STEPS} calls`, () => {
+        const many = Array.from({ length: MAX_RUN_STEPS + 50 }, (_, i) => ({ action: `a${i}` }));
+        const kept = toFlowRunSteps(many)!;
+        expect(kept).toHaveLength(MAX_RUN_STEPS);
+        expect(kept[0].action).toBe("a0");
+    });
+
+    it("gives an empty list for an empty list, and nothing when no list was sent", () => {
+        expect(toFlowRunSteps([])).toEqual([]);
+        expect(toFlowRunSteps(undefined)).toBeUndefined();
+        expect(toFlowRunSteps(null)).toBeUndefined();
+        expect(toFlowRunSteps({ action: "search" })).toBeUndefined();
     });
 });
 
 describe("flowSummary", () => {
-    it("counts the latest try and lists every try, oldest first", () => {
+    const run = (steps: IFlowRunStep[], transactionIds = ["t1"]) => ({
+        flowId: "A",
+        transactionId: transactionIds.at(-1)!,
+        transactionIds,
+        steps,
+    });
+
+    it("counts the latest run and lists every transaction", () => {
         expect(
-            flowSummary(flowA, [
-                msg("SEARCH", "NACK", { transactionId: "t1" }),
-                msg("SEARCH", "ACK", { transactionId: "t2" }),
-                msg("ON_SEARCH", "NACK", { transactionId: "t2" }),
-            ]),
+            flowSummary(flowA, run([msg("SEARCH"), msg("ON_SEARCH", "NACK")], ["t1", "t2"])),
         ).toEqual({
             flowId: "A",
             totalSteps: 2,
@@ -132,23 +165,29 @@ describe("flowSummary", () => {
 
     it("shows a flow that never ran with nothing passed, forms included", () => {
         const flow = { flowId: "F", steps: ["search", "html_form"] };
+        const empty = { flowId: "F", totalSteps: 2, passedSteps: 0, failedSteps: 0, transactionIds: [] };
 
-        expect(flowSummary(flow, [msg("SEARCH", "ACK", { flowId: "other" })])).toEqual({
-            flowId: "F",
-            totalSteps: 2,
-            passedSteps: 0,
-            failedSteps: 0,
-            transactionIds: [],
-        });
+        expect(flowSummary(flow)).toEqual(empty);
+        expect(flowSummary(flow, null)).toEqual(empty);
     });
 
     it("counts forms as passed once the flow has run", () => {
-        const flow = { flowId: "F", steps: ["search", "html_form", "select"] };
+        const flow = { flowId: "A", steps: ["search", "html_form", "select"] };
 
-        expect(flowSummary(flow, [msg("SEARCH", "ACK", { flowId: "F" })])).toMatchObject({
+        expect(flowSummary(flow, run([msg("SEARCH")]))).toMatchObject({
             totalSteps: 3,
             passedSteps: 2,
             failedSteps: 0,
+        });
+    });
+
+    it("lists the transaction even when its run has no calls yet", () => {
+        expect(flowSummary(flowA, run([], ["t1"]))).toEqual({
+            flowId: "A",
+            totalSteps: 2,
+            passedSteps: 0,
+            failedSteps: 0,
+            transactionIds: ["t1"],
         });
     });
 });
