@@ -1,3 +1,4 @@
+import { IFlowRun } from "../entity/SessionDetails";
 /** Sessions expire this long after their last activity. */
 export const SESSION_ACTIVE_MS = 4 * 24 * 60 * 60 * 1000;
 
@@ -71,6 +72,7 @@ export interface PortalSessionRow {
 
 export interface PortalSessionDetailRow extends PortalSessionRow {
     orgId: string;
+    flowRuns?: IFlowRun[];
     settings?: Record<string, boolean> | null;
     settingsHistory?: unknown[];
 }
@@ -95,7 +97,9 @@ export function toPortalSessionDetail(
     flowSummary: unknown[],
     now = Date.now(),
 ) {
-    const session = toPortalSession(row, now);
+    // The raw runs only feed flowSummary; they are not part of the reply.
+    const { flowRuns: _runs, ...rest } = row;
+    const session = toPortalSession(rest, now);
     return {
         ...session,
         expiresAt:

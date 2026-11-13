@@ -2,6 +2,7 @@ import { PipelineStage } from "mongoose";
 import {
   SessionDetails,
   ISessionDetails,
+  IFlowRunStep,
   ISettingsChange,
 } from "../entity/SessionDetails";
 import { UserModel } from "../entity/User";
@@ -21,6 +22,67 @@ import {
   hostExpr,
   ParsedNpQuery,
 } from "../utils/npFilters";
+
+/**
+ * Update expression for one flow's run, from one recorder message of transaction
+ * `transactionId` carrying the transaction's steps so far:
+ * - a flow seen for the first time gets a new run;
+ * - a new transaction becomes the latest run (a retry);
+ * - the latest transaction keeps the longer step list, so an older snapshot that
+ *   is saved late cannot shorten it;
+ * - a message from an older transaction changes nothing.
+ * Values are wrapped in $literal so text from a message is never read as an expression.
+ */
+function flowRunsUpdate(flowId: string, transactionId: string, steps: IFlowRunStep[]) {
+  const flow = { $literal: flowId };
+  const txn = { $literal: transactionId };
+  const newSteps = { $literal: steps };
+  const runs = { $ifNull: ["$flowRuns", []] };
+  const ids = { $ifNull: ["$$run.transactionIds", []] };
+  return {
+    $cond: [
+      { $in: [flow, { $map: { input: runs, as: "r", in: "$$r.flowId" } }] },
+      {
+        $map: {
+          input: runs,
+          as: "run",
+          in: {
+            $switch: {
+              branches: [
+                { case: { $ne: ["$$run.flowId", flow] }, then: "$$run" },
+                {
+                  case: { $not: [{ $in: [txn, ids] }] },
+                  then: {
+                    flowId: flow,
+                    transactionId: txn,
+                    transactionIds: { $concatArrays: [ids, [txn]] },
+                    steps: newSteps,
+                  },
+                },
+                {
+                  case: {
+                    $and: [
+                      { $eq: ["$$run.transactionId", txn] },
+                      { $gte: [steps.length, { $size: { $ifNull: ["$$run.steps", []] } }] },
+                    ],
+                  },
+                  then: { $mergeObjects: ["$$run", { steps: newSteps }] },
+                },
+              ],
+              default: "$$run",
+            },
+          },
+        },
+      },
+      {
+        $concatArrays: [
+          runs,
+          [{ flowId: flow, transactionId: txn, transactionIds: [txn], steps: newSteps }],
+        ],
+      },
+    ],
+  };
+}
 
 const PORTAL_SESSION_FIELDS = {
   _id: 0,
@@ -947,6 +1009,7 @@ export class SessionDetailsRepository {
       .select({
         ...PORTAL_SESSION_FIELDS,
         orgId: 1,
+        flowRuns: 1,
         settings: 1,
         settingsHistory: 1,
       })
@@ -977,20 +1040,39 @@ export class SessionDetailsRepository {
     ).exec();
   }
 
-  // Records one saved message on its session, in a single write: its flow and
-  // time. Only sessions of an organisation, the only ones the NP Portal lists.
-  // $max keeps a message that arrives late from moving the time back. Left out
+  // Records one saved message on its session, in a single write that reads
+  // nothing: its time, its flow, and the flow's latest run from the recorder.
+  // Only sessions of an organisation, the only ones the NP Portal lists. Left out
   // of updatedAt on purpose: the business dashboards sort and export by it.
   async saveMessageActivity(
     sessionId: string,
-    data: { at: Date; flowId?: string | null },
+    data: {
+      at: Date;
+      flowId?: string | null;
+      transactionId?: string | null;
+      steps?: IFlowRunStep[];
+    },
   ) {
+    const set: Record<string, unknown> = {
+      // $max keeps a message that arrives late from moving the time back.
+      lastActivityAt: { $max: ["$lastActivityAt", data.at] },
+    };
+    if (data.flowId) {
+      const flowIds = { $ifNull: ["$flowIds", []] };
+      set.flowIds = {
+        $cond: [
+          { $in: [{ $literal: data.flowId }, flowIds] },
+          flowIds,
+          { $concatArrays: [flowIds, [{ $literal: data.flowId }]] },
+        ],
+      };
+      if (data.transactionId && data.steps) {
+        set.flowRuns = flowRunsUpdate(data.flowId, data.transactionId, data.steps);
+      }
+    }
     return SessionDetails.updateOne(
       { sessionId, orgId: { $nin: [null, ""] } },
-      {
-        $max: { lastActivityAt: data.at },
-        ...(data.flowId ? { $addToSet: { flowIds: data.flowId } } : {}),
-      },
+      [{ $set: set }],
       { timestamps: false },
     ).exec();
   }
