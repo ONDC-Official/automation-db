@@ -46,6 +46,17 @@ const saveMessage = (sessionId: string, action: string, status = "ACK", flowId =
     return post("/api/sessions/payload").send({ ...body, sessionDetails: { sessionId } });
 };
 
+/** A message as the recorder sends it: with the transaction's calls so far. */
+const sendRun = (
+    sessionId: string,
+    { flowId = "A", transactionId = "t1", apiList }: { flowId?: string; transactionId?: string; apiList?: unknown },
+) => {
+    const { sessionId: _unused, ...body } = payloadData({ action: "SEARCH", flowId, transactionId, ...reply("ACK") });
+    return post("/api/sessions/payload").send({ ...body, sessionDetails: { sessionId }, apiList });
+};
+
+const call = (action: string, ack = "ACK", messageId = `${action}-1`) => ({ action, messageId, ack });
+
 const row = (sessionId: string) =>
     SessionDetails.findOne({ sessionId }).lean() as Promise<any>;
 
@@ -291,6 +302,200 @@ describe("activity recording", () => {
     });
 });
 
+describe("flow runs from the recorder", () => {
+    const runs = async (sessionId = "s") => (await row(sessionId)).flowRuns ?? [];
+    const settle = () => new Promise((resolve) => setTimeout(resolve, 50));
+
+    it("starts a run for a flow seen for the first time", async () => {
+        await session("s");
+
+        await sendRun("s", { apiList: [call("search")] });
+
+        await vi.waitFor(async () =>
+            expect(await runs()).toEqual([
+                { flowId: "A", transactionId: "t1", transactionIds: ["t1"], steps: [call("search")] },
+            ]),
+        );
+        expect((await row("s")).flowIds).toEqual(["A"]);
+    });
+
+    it("keeps the growing list of the same transaction", async () => {
+        await session("s");
+        await sendRun("s", { apiList: [call("search")] });
+        await vi.waitFor(async () => expect(await runs()).toHaveLength(1));
+
+        await sendRun("s", { apiList: [call("search"), call("on_search", "NACK")] });
+
+        await vi.waitFor(async () => expect((await runs())[0].steps).toHaveLength(2));
+        expect((await runs())[0]).toMatchObject({ transactionId: "t1", transactionIds: ["t1"] });
+    });
+
+    it("does not let an older, shorter list of the same transaction replace a longer one", async () => {
+        await session("s");
+        await sendRun("s", { apiList: [call("search"), call("on_search")] });
+        await vi.waitFor(async () => expect((await runs())[0]?.steps).toHaveLength(2));
+
+        await sendRun("s", { apiList: [call("search")] });
+        await settle();
+
+        expect((await runs())[0].steps).toHaveLength(2);
+    });
+
+    it("makes a new transaction (a retry) the latest run and keeps every ID", async () => {
+        await session("s");
+        await sendRun("s", { transactionId: "t1", apiList: [call("search", "NACK")] });
+        await vi.waitFor(async () => expect(await runs()).toHaveLength(1));
+
+        await sendRun("s", { transactionId: "t2", apiList: [call("search")] });
+
+        await vi.waitFor(async () => expect((await runs())[0].transactionId).toBe("t2"));
+        expect(await runs()).toEqual([
+            { flowId: "A", transactionId: "t2", transactionIds: ["t1", "t2"], steps: [call("search")] },
+        ]);
+    });
+
+    it("ignores a late message from an older transaction", async () => {
+        await session("s");
+        await sendRun("s", { transactionId: "t1", apiList: [call("search", "NACK")] });
+        await vi.waitFor(async () => expect(await runs()).toHaveLength(1));
+        await sendRun("s", { transactionId: "t2", apiList: [call("search")] });
+        await vi.waitFor(async () => expect((await runs())[0].transactionId).toBe("t2"));
+
+        await sendRun("s", { transactionId: "t1", apiList: [call("search", "NACK"), call("on_search", "NACK"), call("x")] });
+        await settle();
+
+        expect(await runs()).toEqual([
+            { flowId: "A", transactionId: "t2", transactionIds: ["t1", "t2"], steps: [call("search")] },
+        ]);
+    });
+
+    it("keeps each flow's run separate, including flow IDs with dots", async () => {
+        await session("s");
+        await sendRun("s", { flowId: "ORDER_FLOW_WITH_IGM(v-1.0.0)", apiList: [call("search")] });
+        await vi.waitFor(async () => expect(await runs()).toHaveLength(1));
+
+        await sendRun("s", { flowId: "B", transactionId: "t9", apiList: [call("select", "NACK")] });
+
+        await vi.waitFor(async () => expect(await runs()).toHaveLength(2));
+        expect((await runs()).map((r: any) => [r.flowId, r.transactionId, r.steps.length])).toEqual([
+            ["ORDER_FLOW_WITH_IGM(v-1.0.0)", "t1", 1],
+            ["B", "t9", 1],
+        ]);
+        expect((await row("s")).flowIds).toEqual(["ORDER_FLOW_WITH_IGM(v-1.0.0)", "B"]);
+    });
+
+    it("stores text from a message as text, never as a database expression", async () => {
+        await session("s", { flowIds: ["$flowIds"] });
+
+        await sendRun("s", {
+            flowId: "$flowIds",
+            transactionId: "$$ROOT",
+            apiList: [{ action: "$sessionId", messageId: "$$REMOVE", ack: "$lastActivityAt" }],
+        });
+
+        await vi.waitFor(async () => expect(await runs()).toHaveLength(1));
+        expect(await runs()).toEqual([
+            {
+                flowId: "$flowIds",
+                transactionId: "$$ROOT",
+                transactionIds: ["$$ROOT"],
+                steps: [{ action: "$sessionId", messageId: "$$REMOVE", ack: "$LASTACTIVITYAT" }],
+            },
+        ]);
+        expect((await row("s")).flowIds).toEqual(["$flowIds"]);
+    });
+
+    it("leaves runs alone when the recorder sends no list (older recorder)", async () => {
+        await session("s");
+        await sendRun("s", { apiList: [call("search")] });
+        await vi.waitFor(async () => expect(await runs()).toHaveLength(1));
+
+        await saveMessage("s", "ON_SEARCH", "ACK", "B");
+
+        await vi.waitFor(async () => expect((await row("s")).flowIds).toEqual(["A", "B"]));
+        expect(await runs()).toHaveLength(1);
+    });
+
+    it("records no run for a message without a transaction or flow", async () => {
+        await session("s");
+        const { SessionDetailsRepository } = await import("../../repositories/SessionDetailsRepository");
+        const repo = new SessionDetailsRepository();
+
+        await repo.saveMessageActivity("s", { at: new Date(), flowId: "A", steps: [call("search")] });
+        await repo.saveMessageActivity("s", { at: new Date(), transactionId: "t1", steps: [call("search")] });
+
+        expect(await runs()).toEqual([]);
+        expect((await row("s")).flowIds).toEqual(["A"]);
+    });
+
+    it("saves an empty list as a run with no calls", async () => {
+        await session("s");
+
+        await sendRun("s", { apiList: [] });
+
+        await vi.waitFor(async () =>
+            expect(await runs()).toEqual([{ flowId: "A", transactionId: "t1", transactionIds: ["t1"], steps: [] }]),
+        );
+    });
+
+    it("skips sessions with no organisation", async () => {
+        await session("s", { orgId: undefined });
+
+        await sendRun("s", { apiList: [call("search")] });
+        await settle();
+
+        expect(await runs()).toEqual([]);
+    });
+
+    it("does not save the list in the payload itself", async () => {
+        await session("s");
+
+        expect((await sendRun("s", { apiList: [call("search")] })).status).toBe(201);
+
+        const { Payload } = await import("../../entity/Payload");
+        const saved: any = await Payload.findOne({ sessionId: "s" }).lean();
+        expect(saved).toBeTruthy();
+        expect(saved.apiList).toBeUndefined();
+    });
+
+    it("still writes only once per message and reads nothing", async () => {
+        await session("s");
+        const findOne = vi.spyOn(SessionDetails, "findOne");
+        const find = vi.spyOn(SessionDetails, "find");
+        const updateOne = vi.spyOn(SessionDetails, "updateOne");
+
+        await sendRun("s", { apiList: [call("search")] });
+        await vi.waitFor(async () => expect(updateOne).toHaveBeenCalledTimes(1));
+        await settle();
+        const reads = findOne.mock.calls.length + find.mock.calls.length;
+        const writes = updateOne.mock.calls.length;
+        findOne.mockRestore();
+        find.mockRestore();
+        updateOne.mockRestore();
+
+        expect(reads).toBe(0);
+        expect(writes).toBe(1);
+    });
+
+    it("counts the steps end to end: retry, NACK, late callback, forms", async () => {
+        await seedFlow("A", "search", "on_search", "html_form", "select", "on_select");
+        await session("s");
+        await sendRun("s", { transactionId: "t1", apiList: [call("search", "NACK")] });
+        await vi.waitFor(async () => expect(await runs()).toHaveLength(1));
+        await sendRun("s", {
+            transactionId: "t2",
+            apiList: [call("search"), call("on_search"), call("select"), call("search", "NACK")],
+        });
+        await vi.waitFor(async () => expect((await runs())[0].transactionId).toBe("t2"));
+
+        const { body } = await get(`/api/sessions/portal/${ORG}/s`);
+
+        expect(body.flowSummary).toEqual([
+            { flowId: "A", totalSteps: 5, passedSteps: 4, failedSteps: 0, transactionIds: ["t1", "t2"] },
+        ]);
+    });
+});
+
 describe("GET /api/sessions/portal/:orgId/:sessionId", () => {
     const detail = (sessionId: string, orgId = ORG) =>
         get(`/api/sessions/portal/${orgId}/${sessionId}`);
@@ -309,13 +514,8 @@ describe("GET /api/sessions/portal/:orgId/:sessionId", () => {
                 },
             ],
         });
-        await seedPayload({
-            sessionId: "s",
-            action: "SEARCH",
-            flowId: "A",
-            transactionId: "t1",
-            ...reply("ACK"),
-        });
+        await sendRun("s", { apiList: [call("search")] });
+        await vi.waitFor(async () => expect((await row("s")).flowRuns).toHaveLength(1));
 
         const res = await detail("s");
 
@@ -331,6 +531,39 @@ describe("GET /api/sessions/portal/:orgId/:sessionId", () => {
         expect(res.body.flowSummary).toEqual([
             { flowId: "A", totalSteps: 2, passedSteps: 1, failedSteps: 0, transactionIds: ["t1"] },
             { flowId: "B", totalSteps: 1, passedSteps: 0, failedSteps: 0, transactionIds: [] },
+        ]);
+        expect(res.body.flowRuns).toBeUndefined();
+    });
+
+    it("never reads saved messages", async () => {
+        await seedFlow("A", "search", "on_search");
+        await session("s");
+        await sendRun("s", { apiList: [call("search"), call("on_search", "NACK")] });
+        await vi.waitFor(async () => expect((await row("s")).flowRuns).toHaveLength(1));
+        const { Payload } = await import("../../entity/Payload");
+        const find = vi.spyOn(Payload, "find");
+        const findOne = vi.spyOn(Payload, "findOne");
+        const aggregate = vi.spyOn(Payload, "aggregate");
+
+        const res = await detail("s");
+        const reads = find.mock.calls.length + findOne.mock.calls.length + aggregate.mock.calls.length;
+        find.mockRestore();
+        findOne.mockRestore();
+        aggregate.mockRestore();
+
+        expect(reads).toBe(0);
+        expect(res.body.flowSummary[0]).toMatchObject({ passedSteps: 1, failedSteps: 1 });
+    });
+
+    it("shows zero counts for a session from before flow runs were saved", async () => {
+        await seedFlow("A", "search");
+        await session("s", { flowIds: ["A"] });
+        await seedPayload({ sessionId: "s", action: "SEARCH", flowId: "A", transactionId: "t1", ...reply("ACK") });
+
+        const { body } = await detail("s");
+
+        expect(body.flowSummary).toEqual([
+            { flowId: "A", totalSteps: 1, passedSteps: 0, failedSteps: 0, transactionIds: [] },
         ]);
     });
 

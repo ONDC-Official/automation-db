@@ -433,7 +433,8 @@ export const deleteSession = async (req: Request, res: Response) => {
  */
 export const createPayloadForSession = async (req: Request, res: Response) => {
   try {
-    const { sessionDetails, ...rest } = req.body;
+    // apiList is the recorder's step list for the session API; it is not part of the saved payload.
+    const { sessionDetails, apiList, ...rest } = req.body;
     const payloadData = {
       ...rest,
       sessionId: sessionDetails?.sessionId || null, // safely extract sessionId
@@ -443,7 +444,7 @@ export const createPayloadForSession = async (req: Request, res: Response) => {
     res.status(201).json(newPayload);
     // After the reply, so a failure here can never affect the saved message.
     sessionDetailsService
-      .recordMessageActivity(payloadData.sessionId, newPayload)
+      .recordMessageActivity(payloadData.sessionId, newPayload, apiList)
       .catch((error) =>
         logger.error(`Error updating activity of session ${payloadData.sessionId}`, error)
       );

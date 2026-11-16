@@ -14,7 +14,7 @@ import {
   toPortalSession,
   toPortalSessionDetail,
 } from "../utils/portalSessions";
-import { flowSummary, SavedMessage } from "../utils/flowSummary";
+import { flowSummary, toFlowRunSteps } from "../utils/flowSummary";
 import { ProtocolService } from "./ProtocolService";
 import { ISettingsChange, SessionDetails } from "../entity/SessionDetails";
 import { Payload } from "../entity/Payload";
@@ -45,44 +45,35 @@ export class SessionDetailsService {
     const row = await this.sessionRepo.findPortalSession(orgId, sessionId);
     if (!row) return null;
 
-    const { messages, build } = await this.loadSummaryInputs(sessionId, row);
+    // Flow steps come from the build; results come from the session row only.
+    const build = await new ProtocolService().listBuildFlows(
+      String(row.domain),
+      String(row.version),
+      String(row.usecaseId),
+    );
+    const runs = new Map((row.flowRuns ?? []).map((run) => [run.flowId, run]));
     return toPortalSessionDetail(
       row,
-      build.map((flow) => flowSummary(flow, messages)),
+      build.map((flow) => flowSummary(flow, runs.get(flow.flowId))),
     );
   }
 
-  private async loadSummaryInputs(
-    sessionId: string,
-    session: { domain?: string | null; version?: string | null; usecaseId?: string | null },
-  ) {
-    const [rows, build] = await Promise.all([
-      this.payloadRepo.findSummaryFields(sessionId),
-      new ProtocolService().listBuildFlows(
-        String(session.domain),
-        String(session.version),
-        String(session.usecaseId),
-      ),
-    ]);
-    const messages: SavedMessage[] = rows.map((row: any) => ({
-      ...row,
-      ack: row.jsonResponse?.response?.message?.ack?.status,
-    }));
-    return { messages, build };
-  }
-
   /**
-   * Updates a session's last activity and flows from one saved message. Uses only
-   * the message itself, so it reads nothing.
+   * Updates a session from one saved message: last activity, flows, and the
+   * flow's latest run from the recorder's step list. Uses only the message, so it
+   * reads nothing.
    */
   async recordMessageActivity(
     sessionId: string | null | undefined,
-    message: { flowId?: string | null; createdAt?: Date },
+    message: { flowId?: string | null; transactionId?: string | null; createdAt?: Date },
+    apiList?: unknown,
   ): Promise<void> {
     if (!sessionId || !message.createdAt) return;
     await this.sessionRepo.saveMessageActivity(sessionId, {
       at: message.createdAt,
       flowId: message.flowId,
+      transactionId: message.transactionId,
+      steps: toFlowRunSteps(apiList),
     });
   }
 

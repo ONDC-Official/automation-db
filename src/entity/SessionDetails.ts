@@ -12,6 +12,22 @@ export interface IFlowSummaryEntry {
   completed: number;
 }
 
+/** One step call of a flow run, as the recorder sends it. */
+export interface IFlowRunStep {
+  action: string;
+  messageId: string;
+  /** `ACK`, `NACK`, or empty when no reply was saved. */
+  ack: string;
+}
+
+/** A flow's runs in one session: every transaction ID, and the steps of the latest. */
+export interface IFlowRun {
+  flowId: string;
+  transactionId: string;
+  transactionIds: string[];
+  steps: IFlowRunStep[];
+}
+
 export interface ISettingsChange {
   changedAt: Date;
   changedBy: string;
@@ -40,6 +56,8 @@ export interface ISessionDetails extends Document {
   lastActivityAt?: Date | null;
   // Flows with a saved message; flows[] does not record this.
   flowIds?: string[];
+  // Latest run of each flow, from the recorder. The session API counts steps from it.
+  flowRuns?: IFlowRun[];
   // Validation settings as Workbench names them; live copy is in Redis.
   settings?: Record<string, boolean> | null;
   // Newest first, last 10.
@@ -53,6 +71,16 @@ const FlowSchema = new Schema<IFlow>(
     id: { type: String, required: true },
     status: { type: String, enum: ["PENDING", "COMPLETED"], required: true },
     payloads: [{ type: String }],
+  },
+  { _id: false }
+);
+
+const FlowRunSchema = new Schema<IFlowRun>(
+  {
+    flowId: { type: String, required: true },
+    transactionId: { type: String, required: true },
+    transactionIds: [{ type: String }],
+    steps: [{ _id: false, action: String, messageId: String, ack: String }],
   },
   { _id: false }
 );
@@ -90,6 +118,7 @@ const SessionDetailsSchema = new Schema<ISessionDetails>(
     flowMap: { type: Schema.Types.Mixed, default: null },
     lastActivityAt: { type: Date },
     flowIds: [{ type: String }],
+    flowRuns: [FlowRunSchema],
     settings: { type: Schema.Types.Mixed },
     settingsHistory: [SettingsChangeSchema],
   },
