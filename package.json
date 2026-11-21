@@ -12,6 +12,7 @@
         "test:watch": "vitest",
         "test:coverage": "vitest run --coverage",
         "test:types": "tsc -p tsconfig.test.json",
+        "check:tool-versions": "node scripts/check-tool-versions.mjs",
         "backfill:reports": "ts-node src/scripts/backfill-reports.ts",
         "backfill:flowmap": "ts-node src/scripts/backfill-flowmap.ts",
         "typeorm": "typeorm-ts-node-commonjs",
@@ -56,6 +57,7 @@
         "multer": "^2.1.1",
         "pg": "^8.13.1",
         "reflect-metadata": "^0.2.2",
-        "typeorm": "^0.3.28"
+        "typeorm": "^0.3.28",
+        "zod": "4.3.6"
     }
 }

@@ -249,6 +249,41 @@ describe("POST /api/sessions/payload", () => {
         expect(res.body).not.toHaveProperty("sessionDetails");
     });
 
+    // FD: the recorder adds durationMs (the exchange's answer time) to FD
+    // payloads only. The schema is strict, so the field must be declared or
+    // Mongoose drops it silently. It round-trips to POST /payload/ids, which
+    // the report service reads, and a payload without it stays without it.
+    it("keeps an FD payload's durationMs, and adds none to a payload without it", async () => {
+        const fd = await post("/api/sessions/payload").send({
+            sessionDetails: { sessionId: "s-fd" },
+            payloadId: "p-fd",
+            action: "QUOTE_REQUEST",
+            httpStatus: 200,
+            durationMs: 137,
+        });
+        const beckn = await post("/api/sessions/payload").send({
+            sessionDetails: { sessionId: "s-beckn" },
+            payloadId: "p-beckn",
+            action: "SEARCH",
+            httpStatus: 200,
+        });
+        expect(fd.status).toBe(201);
+        expect(fd.body.durationMs).toBe(137);
+        expect(beckn.status).toBe(201);
+        expect(beckn.body).not.toHaveProperty("durationMs");
+
+        const read = await post("/payload/ids").send({ payload_ids: ["p-fd", "p-beckn"] });
+        expect(read.status).toBe(200);
+        const byId = Object.fromEntries(
+            read.body.payloads.map((p: { payloadId: string }) => [p.payloadId, p]),
+        );
+        expect(byId["p-fd"].durationMs).toBe(137);
+        expect(byId["p-beckn"]).not.toHaveProperty("durationMs");
+
+        const stored = await Payload.findOne({ payloadId: "p-beckn" }).lean();
+        expect(stored).not.toHaveProperty("durationMs");
+    });
+
     // QUIRK: sessionId is required by the schema, so a missing sessionDetails
     // becomes a validation 400 rather than a clear "sessionDetails required".
     it("400s when sessionDetails is absent", async () => {

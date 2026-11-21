@@ -2,6 +2,9 @@ import { SessionDetails, ISessionDetails } from "../entity/SessionDetails";
 import { Payload } from "../entity/Payload";
 import { Report } from "../entity/Reports";
 import { UserModel } from "../entity/User";
+import { CertificateRepository } from "../repositories/CertificateRepository";
+import { CertificateService } from "../services/CertificateService";
+import { IssueCertificateRequest } from "../validation/certificates";
 
 let counter = 0;
 const uniq = (prefix: string) => `${prefix}-${++counter}`;
@@ -82,6 +85,76 @@ export function userData(
         sessionIds: [],
         ...overrides,
     };
+}
+
+/**
+ * A full-pass FD run summary in the shape `POST /certificates` accepts: three
+ * requirements, all PASS with scenarios and evidence, no findings.
+ */
+export function certificateRequest(
+    overrides: Record<string, unknown> = {},
+): Record<string, unknown> {
+    return {
+        subscriberId: "issuer.example.com",
+        role: "DEPOSIT_ISSUER",
+        domain: "ONDC:FIS14:FD",
+        version: "0.1.4",
+        tableHash: "sha256:5f1c0d2e",
+        toolVersions: {
+            "build-tools": "0.0.32",
+            "ondc-code-generator": "1.1.2",
+            "api-service-generator": "1.1.2",
+            plugins: "6c1a9e0",
+            onix: "sha256:ab12cd34",
+            "fd-contract": "0.1.0",
+        },
+        runs: [
+            {
+                sessionId: "session-fd-1",
+                flowId: "FD_BOOKING",
+                transactionId: "txn-fd-1",
+                startedAt: "2026-10-29T10:00:00.000Z",
+                finishedAt: "2026-10-29T10:20:00.000Z",
+                seed: "c0ffee",
+            },
+        ],
+        coverage: {
+            "FD-PRD-04": {
+                status: "PASS",
+                scenarios: ["booking-happy-path"],
+                evidence: ["msg-1", "msg-2"],
+            },
+            "FD-PRD-05": {
+                status: "PASS",
+                scenarios: ["booking-happy-path"],
+                evidence: ["msg-3"],
+            },
+            "FD-MOD-05": {
+                status: "PASS",
+                scenarios: ["modification"],
+                evidence: ["msg-4"],
+            },
+        },
+        findings: [],
+        waivers: [],
+        ...overrides,
+    };
+}
+
+/**
+ * Issues through the service with a fixed clock, for tests that need records
+ * in a known issuedAt order. Signed with the test key from vitest.config.mts.
+ */
+export async function issueCertificate(
+    overrides: Record<string, unknown> = {},
+    issuedAt: Date = new Date(),
+) {
+    const service = new CertificateService(
+        new CertificateRepository(),
+        () => issuedAt,
+    );
+    const input = IssueCertificateRequest.parse(certificateRequest(overrides));
+    return (await service.issue(input)).certificate;
 }
 
 /** Persist helpers — use when a test needs the document to already exist. */

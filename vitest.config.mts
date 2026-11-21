@@ -30,6 +30,9 @@ export default defineConfig({
         env: {
             NODE_ENV: "test",
             API_SERVICE_KEY: "test-key",
+            // FD certification key: a throwaway 32-byte seed (all 0x01).
+            FD_CERT_SIGNING_KEY: "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=",
+            FD_CERT_KEY_ID: "test-cert-key",
         },
     },
     resolve: {
